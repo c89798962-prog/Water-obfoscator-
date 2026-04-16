@@ -1,16 +1,23 @@
 const DISCORD = "https://discord.gg/5E45u5eES";
-const HEADER = `--[[ MIMOSA ADVANCED VM v4.5 - ${DISCORD} ]]`;
-const IL_POOL = ["I", "l", "1", "i"];
+const HEADER = `--[[ MIMOSA VM v4.5 - ${DISCORD} - 15KB ]]`;
+const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il"];
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"];
 
-// Generador de nombres estilo IlIl
 function generateIlName() {
-  let name = "Il"; 
-  const len = Math.floor(Math.random() * 8) + 6;
-  for (let i = 0; i < len; i++) name += IL_POOL[Math.floor(Math.random() * IL_POOL.length)];
-  return name + Math.floor(Math.random() * 999);
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 9999);
 }
 
-// Funciones matemáticas originales (Sin añadir nuevas)
+function pickHandlers(count) {
+  const used = new Set();
+  const result = [];
+  while (result.length < count) {
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)];
+    const name = base + Math.floor(Math.random() * 99);
+    if (!used.has(name)) { used.add(name); result.push(name); }
+  }
+  return result;
+}
+
 function lightMath(n) {
   let a = Math.floor(Math.random() * 90) + 20, b = Math.floor(Math.random() * 60) + 10;
   return `(${n}+${a}*${b}-${a})`;
@@ -25,18 +32,18 @@ function mba() {
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// Generador de Junk usando solo las funciones existentes
-function generateJunk(lines = 10) {
+function generateJunk(lines = 144) {
   let j = '';
   for (let i = 0; i < lines; i++) {
     const r = Math.random();
-    if (r < 0.5) j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 999))}; `;
-    else j += `local ${generateIlName()}=${mba()}; `;
+    if (r < 0.25)      j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 9999))}; `;
+    else if (r < 0.5)  j += `local ${generateIlName()}=${mba()}; `;
+    else if (r < 0.75) j += `local ${generateIlName()}=${lightMath(mba())}; `;
+    else               j += `local ${generateIlName()}=(${mba()}+${lightMath(Math.floor(Math.random() * 999))}); `;
   }
   return j;
 }
 
-// Mapeo de instancias de Roblox
 const MAPEO = {
   "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
   "TextButton":"Mixed Boolean Arithmetic","TextBox":"Aggressive Renaming","ImageLabel":"Size-Based Execution Switch",
@@ -53,11 +60,12 @@ function detectAndApplyMappings(code) {
     const regex = new RegExp(`(game\\s*\\.\\s*|\\b\\.\\s*)?\\b${word}\\b`, "g");
     if (regex.test(modified)) {
       let replacement = `"${word}"`;
-      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
-      else if (tech.includes("String to Math")) replacement = `string.char(${stringToMath(word)})`;
-      else if (tech.includes("Table Indirection")) { const t = generateIlName(); headers += `local ${t}={"${word}"};`; replacement = `${t}[1]`; }
+      if (tech.includes("Aggressive Renaming"))          { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math"))           replacement = `string.char(${stringToMath(word)})`;
+      else if (tech.includes("Table Indirection"))        { const t = generateIlName(); headers += `local ${t}={"${word}"};`; replacement = `${t}[1]`; }
       else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
-      else if (tech.includes("Fake Flow")) replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`;
+      else if (tech.includes("Fake Flow"))                replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`;
+      else if (tech.includes("Virtual Machine"))          replacement = `loadstring("return '${word}'")()`; 
       regex.lastIndex = 0;
       modified = modified.replace(regex, (match, prefix) => {
         if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`;
@@ -68,61 +76,96 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
+function buildVMWrapper(innerCode) {
+  const handlerCount = 5 + Math.floor(Math.random() * 4);
+  const handlers = pickHandlers(handlerCount);
+  const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName();
+
+  let out = '';
+
+  // lM = VM registers (lM repite por todo el código para confundir el rastreo)
+  out += `local lM={`;
+  for (let i = 1; i <= 8; i++) {
+    out += `[${i}]=${lightMath(Math.floor(Math.random() * 999))},`;
+  }
+  out += `};`;
+  out += `local lM=lM;`; // re-shadow para confundir
+
+  // Handlers: cada uno recibe lM como param y lo re-shadowea adentro
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) {
+      // Handler real: decoder XOR + payload oculto adentro
+      out += `local ${handlers[i]}=function(lM)`;
+      out += `local lM=lM;`;
+      out += generateJunk(8);
+      out += innerCode;
+      out += `end;`;
+    } else {
+      // Handler falso: junk + return lM
+      const junkCount = 3 + Math.floor(Math.random() * 6);
+      out += `local ${handlers[i]}=function(lM)`;
+      out += `local lM=lM;`;
+      out += generateJunk(junkCount);
+      out += `return lM;`;
+      out += `end;`;
+    }
+  }
+
+  // Dispatch table: opcode → handler
+  out += `local ${DISPATCH}={`;
+  for (let i = 0; i < handlers.length; i++) {
+    out += `[${i + 1}]=${handlers[i]},`;
+  }
+  out += `};`;
+
+  // Llamar handlers falsos primero (ruido)
+  for (let i = 0; i < handlers.length; i++) {
+    if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM);`;
+  }
+
+  // Llamar handler real al final
+  out += `${DISPATCH}[${realIdx + 1}](lM);`;
+
+  return out;
+}
+
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
-  
-  // Pre-procesamiento con los mapeos originales
+
   let preProcessed = detectAndApplyMappings(sourceCode);
-  const xorKey = Math.floor(Math.random() * 250) + 5;
-  
-  // Compilación a Opcodes para la VM
-  const instructions = [];
-  instructions.push(`{1,0,${xorKey}}`); // Op 1: SET KEY
+  const seed = Date.now() + Math.random() * 99999999;
+  const xorKeyBase = Math.floor(seed % 2147483647) + 1;
+  const bytes = preProcessed.split('').map((char, i) => {
+    let val = char.charCodeAt(0) ^ (xorKeyBase + i * 5);
+    val = val ^ (xorKeyBase >>> 4);
+    return val & 0xFF;
+  });
 
-  for (let i = 0; i < preProcessed.length; i++) {
-    let encryptedByte = preProcessed.charCodeAt(i) ^ xorKey;
-    instructions.push(`{2,1,${encryptedByte}}`); // Op 2: LOAD BYTE
-    instructions.push(`{3,2,1,0}`);               // Op 3: XOR
-    instructions.push(`{4,2}`);                   // Op 4: PUSH STACK
-  }
-  instructions.push(`{5}`); // Op 5: EXECUTE
+  const VM_DATA = generateIlName(), XOR_KEY = generateIlName();
+  const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName();
 
-  // Variables de la Máquina Virtual
-  const regs = generateIlName(), pc = generateIlName(), stack = generateIlName();
-  const bytecode = generateIlName(), handlers = generateIlName();
+  // Código interno del handler real: XOR decoder + loadstring
+  let innerCode = '';
+  innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))};`;
+  innerCode += `local ${XOR_KEY}=${mba()};`;
+  innerCode += `local ${PC}=1;local ${STACK}="";`;
+  innerCode += `local ${DECODER}=function()`;
+  innerCode += generateJunk(20);
+  innerCode += `while ${PC}<=#${VM_DATA} do `;
+  innerCode += `local lM=${VM_DATA}[${PC}];`; // lM como var del loop
+  innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
+  innerCode += `${PC}=${PC}+1;`;
+  innerCode += `end;return ${STACK};end;`;
+  innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
 
-  let vm = HEADER + "\n";
-  vm += `local bit_xor = bit32 and bit32.bxor or function(a,b) return a~b end; `;
-  vm += generateJunk(20);
-  
-  vm += `local ${regs}={}; local ${pc}=1; local ${stack}=""; `;
-  vm += `local ${bytecode}={${instructions.join(",")}}; `;
-  
-  // Handlers de la VM usando nombres ofuscados
-  const h1=generateIlName(), h2=generateIlName(), h3=generateIlName(), h4=generateIlName(), h5=generateIlName();
-  vm += `local function ${h1}(a) ${regs}[a[2]]=a[3] end; `; 
-  vm += `local function ${h2}(a) ${regs}[a[2]]=a[3] end; `; 
-  vm += `local function ${h3}(a) ${regs}[a[2]]=bit_xor(${regs}[a[3]],${regs}[a[4]]) end; `; 
-  vm += `local function ${h4}(a) ${stack}=${stack}..string.char(${regs}[a[2]]) end; `; 
-  vm += `local function ${h5}() local f=(loadstring or load)(${stack}); if f then f() end end; `;
+  let vm = HEADER + '\n';
+  vm += generateJunk(144);
+  vm += buildVMWrapper(innerCode);
+  vm += generateJunk(126);
 
-  vm += `local ${handlers}={[1]=${h1},[2]=${h2},[3]=${h3},[4]=${h4},[5]=${h5}}; `;
-
-  // Ciclo de ejecución principal
-  vm += `while ${pc}<=#${bytecode} do `;
-  vm += `local inst=${bytecode}[${pc}]; `;
-  vm += `${handlers}[inst[1]](inst); `;
-  vm += `${pc}=${pc}+1; `;
-  vm += `end; `;
-
-  vm += generateJunk(20);
-
-  // Minificación final
-  const wrapper = generateIlName();
-  let finalScript = `local function ${wrapper}() ${vm} end ${wrapper}();`;
-  finalScript = finalScript.replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
-
-  return finalScript;
+  vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
+  return `return(function()${vm}end)();`;
 }
 
 module.exports = { obfuscate };
