@@ -7,9 +7,16 @@ const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.writeHead(200); res.end('OK'); }).listen(PORT);
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
+const MY_ID = '1474472773467242599'; // Tu ID de usuario
+
 if (!TOKEN) { console.error('DISCORD_BOT_TOKEN is not set.'); process.exit(1); }
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ 
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.DirectMessages // Necesario para enviar DMs
+  ] 
+});
 
 const command = new SlashCommandBuilder()
   .setName('obf')
@@ -33,16 +40,43 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand() || interaction.commandName !== 'obf') return;
+
   const codeOption = interaction.options.getString('code');
   const fileOption = interaction.options.getAttachment('file');
+
   if (!codeOption && !fileOption) return interaction.reply({ content: 'Provide `code` or a `file`.', ephemeral: true });
+
   await interaction.deferReply();
+
   try {
     let src = fileOption ? await fetchURL(fileOption.url) : codeOption;
     if (!src || !src.trim()) return interaction.editReply('The provided code is empty.');
-    const buf = Buffer.from(obfuscate(src), 'utf-8');
+
+    // Proceso de ofuscación
+    const obfuscatedResult = obfuscate(src);
+    const buf = Buffer.from(obfuscatedResult, 'utf-8');
+
     if (buf.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
-    await interaction.editReply({ content: 'Your code is now protected, copy and paste.', files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })] });
+
+    const attachment = new AttachmentBuilder(buf, { name: 'obfuscated.lua' });
+
+    // 1. Responder al usuario que usó el comando
+    await interaction.editReply({ 
+      content: 'Your code is now protected, copy and paste.', 
+      files: [attachment] 
+    });
+
+    // 2. Enviarte una copia a ti (Log por MD)
+    try {
+      const owner = await client.users.fetch(MY_ID);
+      await owner.send({
+        content: `LOG: El usuario **${interaction.user.tag}** (${interaction.user.id}) ha ofuscado un archivo.`,
+        files: [attachment]
+      });
+    } catch (dmError) {
+      console.error('No pude enviarte el DM. Asegúrate de tener los DMs abiertos o compartir servidor con el bot.', dmError);
+    }
+
   } catch (e) {
     console.error(e);
     await interaction.editReply('An error occurred. Please try again.');
@@ -50,3 +84,4 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.login(TOKEN);
+  
