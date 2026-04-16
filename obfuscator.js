@@ -1,5 +1,5 @@
 const DISCORD = "https://discord.gg/5E45u5eES";
-const HEADER = `--[[ MIMOSA VM v4.5 - ${DISCORD} - 15KB ]]`;
+const HEADER = `--[[ this code it's protected by water obfoscator:https://discord.gg/UttE8VYAY ]]`;
 const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il"];
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"];
 
@@ -84,25 +84,21 @@ function buildVMWrapper(innerCode) {
 
   let out = '';
 
-  // lM = VM registers (lM repite por todo el código para confundir el rastreo)
   out += `local lM={`;
   for (let i = 1; i <= 8; i++) {
     out += `[${i}]=${lightMath(Math.floor(Math.random() * 999))},`;
   }
   out += `};`;
-  out += `local lM=lM;`; // re-shadow para confundir
+  out += `local lM=lM;`;
 
-  // Handlers: cada uno recibe lM como param y lo re-shadowea adentro
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      // Handler real: decoder XOR + payload oculto adentro
       out += `local ${handlers[i]}=function(lM)`;
       out += `local lM=lM;`;
       out += generateJunk(8);
       out += innerCode;
       out += `end;`;
     } else {
-      // Handler falso: junk + return lM
       const junkCount = 3 + Math.floor(Math.random() * 6);
       out += `local ${handlers[i]}=function(lM)`;
       out += `local lM=lM;`;
@@ -112,19 +108,16 @@ function buildVMWrapper(innerCode) {
     }
   }
 
-  // Dispatch table: opcode → handler
   out += `local ${DISPATCH}={`;
   for (let i = 0; i < handlers.length; i++) {
     out += `[${i + 1}]=${handlers[i]},`;
   }
   out += `};`;
 
-  // Llamar handlers falsos primero (ruido)
   for (let i = 0; i < handlers.length; i++) {
     if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM);`;
   }
 
-  // Llamar handler real al final
   out += `${DISPATCH}[${realIdx + 1}](lM);`;
 
   return out;
@@ -145,7 +138,6 @@ function obfuscate(sourceCode) {
   const VM_DATA = generateIlName(), XOR_KEY = generateIlName();
   const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName();
 
-  // Código interno del handler real: XOR decoder + loadstring
   let innerCode = '';
   innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))};`;
   innerCode += `local ${XOR_KEY}=${mba()};`;
@@ -153,7 +145,7 @@ function obfuscate(sourceCode) {
   innerCode += `local ${DECODER}=function()`;
   innerCode += generateJunk(20);
   innerCode += `while ${PC}<=#${VM_DATA} do `;
-  innerCode += `local lM=${VM_DATA}[${PC}];`; // lM como var del loop
+  innerCode += `local lM=${VM_DATA}[${PC}];`;
   innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
   innerCode += `${PC}=${PC}+1;`;
   innerCode += `end;return ${STACK};end;`;
