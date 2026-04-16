@@ -1,15 +1,16 @@
 const DISCORD = "https://discord.gg/5E45u5eES";
-const HEADER = `--[[ MIMOSA ADVANCED VM - ${DISCORD} ]]`;
-const IL_POOL = ["I", "l"];
+const HEADER = `--[[ MIMOSA ADVANCED VM v4.5 - ${DISCORD} ]]`;
+const IL_POOL = ["I", "l", "1", "i"];
 
-// Generador estricto de variables IlIlIl
+// Generador de nombres estilo IlIl
 function generateIlName() {
-  let name = "Il"; // Fuerza a empezar con Il para mantener el estilo visual
-  const len = Math.floor(Math.random() * 8) + 8;
-  for (let i = 0; i < len; i++) name += IL_POOL[Math.floor(Math.random() * 2)];
-  return name;
+  let name = "Il"; 
+  const len = Math.floor(Math.random() * 8) + 6;
+  for (let i = 0; i < len; i++) name += IL_POOL[Math.floor(Math.random() * IL_POOL.length)];
+  return name + Math.floor(Math.random() * 999);
 }
 
+// Funciones matemáticas originales (Sin añadir nuevas)
 function lightMath(n) {
   let a = Math.floor(Math.random() * 90) + 20, b = Math.floor(Math.random() * 60) + 10;
   return `(${n}+${a}*${b}-${a})`;
@@ -24,91 +25,103 @@ function mba() {
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
+// Generador de Junk usando solo las funciones existentes
 function generateJunk(lines = 10) {
   let j = '';
   for (let i = 0; i < lines; i++) {
     const r = Math.random();
-    if (r < 0.25) j += `local lM_${generateIlName()}=${lightMath(Math.floor(Math.random() * 9999))}; `;
-    else if (r < 0.5) j += `local lM_${generateIlName()}=${mba()}; `;
-    else if (r < 0.75) j += `local lM_${generateIlName()}=${lightMath(mba())}; `;
-    else j += `local lM_${generateIlName()}=(${mba()}+${lightMath(Math.floor(Math.random() * 999))}); `;
+    if (r < 0.5) j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 999))}; `;
+    else j += `local ${generateIlName()}=${mba()}; `;
   }
   return j;
 }
 
+// Mapeo de instancias de Roblox
 const MAPEO = {
-  "Workspace":"Reverse If", "Players":"Fake Flow", "Lighting":"Size-Based Execution Switch"
-  // Puedes mantener tu MAPEO original completo aquí
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","TextBox":"Aggressive Renaming","ImageLabel":"Size-Based Execution Switch",
+  "Humanoid":"Dynamic Junk","Player":"Fake Flow","Character":"Math Encoding","Part":"Literal Obfuscation",
+  "Camera":"Table Indirection","TweenService":"Fake Flow","RunService":"Virtual Machine",
+  "UserInputService":"Mixed Boolean Arithmetic","RemoteEvent":"Fake Flow","Workspace":"Reverse If",
+  "Lighting":"Size-Based Execution Switch","Players":"Fake Flow","ReplicatedStorage":"Table Indirection","StarterGui":"String to Math"
 };
 
 function detectAndApplyMappings(code) {
-  // Simplificado para la demostración, puedes usar tu lógica original de MAPEO
-  return code; 
+  let modified = code, headers = "";
+  const sorted = Object.entries(MAPEO).sort((a, b) => b[0].length - a[0].length);
+  for (const [word, tech] of sorted) {
+    const regex = new RegExp(`(game\\s*\\.\\s*|\\b\\.\\s*)?\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${stringToMath(word)})`;
+      else if (tech.includes("Table Indirection")) { const t = generateIlName(); headers += `local ${t}={"${word}"};`; replacement = `${t}[1]`; }
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
+      else if (tech.includes("Fake Flow")) replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match, prefix) => {
+        if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`;
+        return replacement;
+      });
+    }
+  }
+  return headers + modified;
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
   
+  // Pre-procesamiento con los mapeos originales
   let preProcessed = detectAndApplyMappings(sourceCode);
-  const xorKey = Math.floor(Math.random() * 255) + 1;
+  const xorKey = Math.floor(Math.random() * 250) + 5;
   
-  // 1. "Compilar" el código en Bytecode de la Máquina Virtual
-  // Opcodes: 1=SET_KEY, 2=LOAD_BYTE, 3=XOR, 4=CONCAT, 5=EXECUTE
+  // Compilación a Opcodes para la VM
   const instructions = [];
-  instructions.push(`{1, 0, ${xorKey}}`); // lM_regs[0] = xorKey
+  instructions.push(`{1,0,${xorKey}}`); // Op 1: SET KEY
 
   for (let i = 0; i < preProcessed.length; i++) {
-    let byteCode = preProcessed.charCodeAt(i) ^ xorKey; // Encriptamos aquí
-    instructions.push(`{2, 1, ${byteCode}}`);     // Carga el byte en el registro 1
-    instructions.push(`{3, 2, 1, 0}`);            // XOR: Reg[2] = Reg[1] ^ Reg[0] (Key)
-    instructions.push(`{4, 2}`);                  // Concatena Reg[2] al Stack/Buffer
+    let encryptedByte = preProcessed.charCodeAt(i) ^ xorKey;
+    instructions.push(`{2,1,${encryptedByte}}`); // Op 2: LOAD BYTE
+    instructions.push(`{3,2,1,0}`);               // Op 3: XOR
+    instructions.push(`{4,2}`);                   // Op 4: PUSH STACK
   }
-  instructions.push(`{5}`); // Ejecuta el Stack
+  instructions.push(`{5}`); // Op 5: EXECUTE
 
-  // 2. Generar el entorno falso (Virtual Machine)
-  const regs = `lM_${generateIlName()}`;
-  const pc = `lM_${generateIlName()}`;
-  const stack = `lM_${generateIlName()}`;
-  const bytecode = `lM_${generateIlName()}`;
-  const handlers = `lM_${generateIlName()}`;
+  // Variables de la Máquina Virtual
+  const regs = generateIlName(), pc = generateIlName(), stack = generateIlName();
+  const bytecode = generateIlName(), handlers = generateIlName();
 
-  let vm = `${HEADER}\n`;
-  vm += `local lM_bit_xor = bit32 and bit32.bxor or bit and bit.bxor or function(a,b) return a~b end; `;
-  vm += generateJunk(5);
+  let vm = HEADER + "\n";
+  vm += `local bit_xor = bit32 and bit32.bxor or function(a,b) return a~b end; `;
+  vm += generateJunk(20);
   
-  // Registros y variables de la CPU
-  vm += `local ${regs} = {}; local ${pc} = 1; local ${stack} = ""; `;
-  vm += `local ${bytecode} = {${instructions.join(",")}}; `;
+  vm += `local ${regs}={}; local ${pc}=1; local ${stack}=""; `;
+  vm += `local ${bytecode}={${instructions.join(",")}}; `;
   
-  vm += generateJunk(3);
+  // Handlers de la VM usando nombres ofuscados
+  const h1=generateIlName(), h2=generateIlName(), h3=generateIlName(), h4=generateIlName(), h5=generateIlName();
+  vm += `local function ${h1}(a) ${regs}[a[2]]=a[3] end; `; 
+  vm += `local function ${h2}(a) ${regs}[a[2]]=a[3] end; `; 
+  vm += `local function ${h3}(a) ${regs}[a[2]]=bit_xor(${regs}[a[3]],${regs}[a[4]]) end; `; 
+  vm += `local function ${h4}(a) ${stack}=${stack}..string.char(${regs}[a[2]]) end; `; 
+  vm += `local function ${h5}() local f=(loadstring or load)(${stack}); if f then f() end end; `;
 
-  // Funciones Handler (Manejadores de instrucciones)
-  vm += `local function KQ(args) ${regs}[args[2]] = args[3]; end; `; // Opcode 1: LOAD CONSTANT
-  vm += `local function HF(args) ${regs}[args[2]] = args[3]; end; `; // Opcode 2: LOAD BYTE
-  vm += `local function W8(args) ${regs}[args[2]] = lM_bit_xor(${regs}[args[3]], ${regs}[args[4]]); end; `; // Opcode 3: MATH (XOR)
-  vm += `local function SX(args) ${stack} = ${stack} .. string.char(${regs}[args[2]]); end; `; // Opcode 4: STACK PUSH
-  vm += `local function Z9(args) local fn = (loadstring or load)(${stack}); if fn then fn() end; end; `; // Opcode 5: EXECUTE
+  vm += `local ${handlers}={[1]=${h1},[2]=${h2},[3]=${h3},[4]=${h4},[5]=${h5}}; `;
 
-  vm += generateJunk(5);
-
-  // Tabla de Handlers
-  vm += `local ${handlers} = { [1]=KQ, [2]=HF, [3]=W8, [4]=SX, [5]=Z9 }; `;
-
-  // Ciclo de Ejecución de la Máquina Virtual
-  vm += `while ${pc} <= #${bytecode} do `;
-  vm += `  local lM_inst = ${bytecode}[${pc}]; `;
-  vm += `  local lM_op = lM_inst[1]; `;
-  vm += `  local lM_handler = ${handlers}[lM_op]; `;
-  vm += `  if lM_handler then lM_handler(lM_inst) end; `;
-  vm += `  ${pc} = ${pc} + 1; `;
+  // Ciclo de ejecución principal
+  vm += `while ${pc}<=#${bytecode} do `;
+  vm += `local inst=${bytecode}[${pc}]; `;
+  vm += `${handlers}[inst[1]](inst); `;
+  vm += `${pc}=${pc}+1; `;
   vm += `end; `;
 
-  // Envolver todo en una función anónima confusa
+  vm += generateJunk(20);
+
+  // Minificación final
   const wrapper = generateIlName();
-  let finalScript = `local function ${wrapper}() \n ${vm} \n end \n ${wrapper}();`;
-  
-  // Opcional: Minificar
-  finalScript = finalScript.replace(/\n/g, ' ').replace(/\s+/g, ' ');
+  let finalScript = `local function ${wrapper}() ${vm} end ${wrapper}();`;
+  finalScript = finalScript.replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
+
   return finalScript;
 }
 
