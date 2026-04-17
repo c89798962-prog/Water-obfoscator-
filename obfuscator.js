@@ -123,6 +123,23 @@ function buildVMWrapper(innerCode) {
   return out;
 }
 
+// --- PROTECCIONES AVANZADAS DE NIVEL TOP ---
+function generateProtections() {
+  let p = "";
+  // Anti-Debug (Time Check intacto)
+  p += `local _clk=os.clock;if _clk then local _st=_clk();for _=1,1500 do local _dummy=_*2 end;if _clk()-_st>1.2 then while true do end end end;`;
+  
+  // Anti-Tamper Top Tier (Seguro)
+  p += `local _sc=string.char;local _t=type;local _ts=tostring;local _gm=getmetatable;local _d=debug;`;
+  // 1. Detección de modificación en metatabla de strings
+  p += `if _t(_gm)=="function"then local _mt=_gm("")if _t(_mt)=="table"and _mt.__index then while true do end end end;`;
+  // 2. Detección de Hooks en Lua verificando si es Closure en C
+  p += `if _d and _t(_d.getinfo)=="function"then local _i=_d.getinfo(_sc)if _i and _i.what~="C"then while true do end end end;`;
+  // 3. Verificación estándar de nombres de funciones
+  p += `if _t(_sc)~="function"or _ts(_sc):lower():find("hook")or _ts(_sc):lower():find("closure")then while true do end end;`;
+  return p;
+}
+
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
 
@@ -149,6 +166,10 @@ function obfuscate(sourceCode) {
   innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
   innerCode += `${PC}=${PC}+1;`;
   innerCode += `end;return ${STACK};end;`;
+  
+  // Inyección de protecciones Top Tier
+  innerCode += generateProtections();
+  
   innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
 
   let vm = HEADER + '\n';
@@ -161,3 +182,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate };
+                                                                                             
