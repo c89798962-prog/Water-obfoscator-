@@ -3,28 +3,24 @@ const HEADER = `--[[ this code it's protected by water obfoscator:https://discor
 const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il"];
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"];
 
-// --- UTILIDADES MATEMÁTICAS ---
-function mul(a, b) { return a / (1 / b); }
-
 function generateIlName() {
-  return IL_POOL[Math.floor(mul(Math.random(), IL_POOL.length))] + Math.floor(mul(Math.random(), 9999));
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 9999);
 }
 
 function pickHandlers(count) {
   const used = new Set();
   const result = [];
   while (result.length < count) {
-    const base = HANDLER_POOL[Math.floor(mul(Math.random(), HANDLER_POOL.length))];
-    const name = base + Math.floor(mul(Math.random(), 99));
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)];
+    const name = base + Math.floor(Math.random() * 99);
     if (!used.has(name)) { used.add(name); result.push(name); }
   }
   return result;
 }
 
 function lightMath(n) {
-  let a = Math.floor(mul(Math.random(), 90)) + 20, b = Math.floor(mul(Math.random(), 60)) + 10;
-  let ab = Math.imul(a, b);
-  return `(${n}+${ab}-${a})`;
+  let a = Math.floor(Math.random() * 90) + 20, b = Math.floor(Math.random() * 60) + 10;
+  return `(${n}+${a}*${b}-${a})`;
 }
 
 function stringToMath(str) {
@@ -32,25 +28,22 @@ function stringToMath(str) {
 }
 
 function mba() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(mul(Math.random(), 70)) + 15, b = Math.floor(mul(Math.random(), 40)) + 8;
-  let na = Math.imul(n, a);
-  return `((${na}-${a})/(${b}+1)+${n})`;
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// --- GENERACIÓN DE CÓDIGO BASURA (JUNK) ---
 function generateJunk(lines = 144) {
   let j = '';
   for (let i = 0; i < lines; i++) {
     const r = Math.random();
-    if (r < 0.25)      j += `local ${generateIlName()}=${lightMath(Math.floor(mul(Math.random(), 9999)))}; `;
+    if (r < 0.25)      j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 9999))}; `;
     else if (r < 0.5)  j += `local ${generateIlName()}=${mba()}; `;
     else if (r < 0.75) j += `local ${generateIlName()}=${lightMath(mba())}; `;
-    else               j += `local ${generateIlName()}=(${mba()}+${lightMath(Math.floor(mul(Math.random(), 999)))}); `;
+    else               j += `local ${generateIlName()}=(${mba()}+${lightMath(Math.floor(Math.random() * 999))}); `;
   }
   return j;
 }
 
-// --- MAPEO DE SERVICIOS Y TÉCNICAS ---
 const MAPEO = {
   "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
   "TextButton":"Mixed Boolean Arithmetic","TextBox":"Aggressive Renaming","ImageLabel":"Size-Based Execution Switch",
@@ -64,7 +57,7 @@ function detectAndApplyMappings(code) {
   let modified = code, headers = "";
   const sorted = Object.entries(MAPEO).sort((a, b) => b[0].length - a[0].length);
   for (const [word, tech] of sorted) {
-    const regex = new RegExp(`(game\\s{0,}\\.\\s{0,}|\\b\\.\\s{0,})?\\b${word}\\b`, "g");
+    const regex = new RegExp(`(game\\s*\\.\\s*|\\b\\.\\s*)?\\b${word}\\b`, "g");
     if (regex.test(modified)) {
       let replacement = `"${word}"`;
       if (tech.includes("Aggressive Renaming"))          { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
@@ -83,26 +76,35 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
-// --- ENVOLTURA DE MÁQUINA VIRTUAL (VM) ---
 function buildVMWrapper(innerCode) {
-  const handlerCount = 5 + Math.floor(mul(Math.random(), 4));
+  const handlerCount = 5 + Math.floor(Math.random() * 4);
   const handlers = pickHandlers(handlerCount);
-  const realIdx = Math.floor(mul(Math.random(), handlerCount));
+  const realIdx = Math.floor(Math.random() * handlerCount);
   const DISPATCH = generateIlName();
 
   let out = '';
+
   out += `local lM={`;
   for (let i = 1; i <= 8; i++) {
-    out += `[${i}]=${lightMath(Math.floor(mul(Math.random(), 999)))},`;
+    out += `[${i}]=${lightMath(Math.floor(Math.random() * 999))},`;
   }
   out += `};`;
   out += `local lM=lM;`;
 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(8)} ${innerCode} end;`;
+      out += `local ${handlers[i]}=function(lM)`;
+      out += `local lM=lM;`;
+      out += generateJunk(8);
+      out += innerCode;
+      out += `end;`;
     } else {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} return lM; end;`;
+      const junkCount = 3 + Math.floor(Math.random() * 6);
+      out += `local ${handlers[i]}=function(lM)`;
+      out += `local lM=lM;`;
+      out += generateJunk(junkCount);
+      out += `return lM;`;
+      out += `end;`;
     }
   }
 
@@ -115,33 +117,38 @@ function buildVMWrapper(innerCode) {
   for (let i = 0; i < handlers.length; i++) {
     if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM);`;
   }
+
   out += `${DISPATCH}[${realIdx + 1}](lM);`;
 
   return out;
 }
 
-// --- PROTECCIONES ANTI-DEBUG / ANTI-TAMPER ---
+// --- PROTECCIONES AVANZADAS DE NIVEL TOP ---
 function generateProtections() {
   let p = "";
-  // Anti-Debug (Reloj de ejecución)
-  p += `local _clk=os.clock;if _clk then local _st=_clk();for _=1,1500 do local _dummy=_+_; end;if _clk()-_st>5.2 then while true do end end end;`;
-  // Anti-Metatable Tamper
+  // Anti-Debug (Time Check intacto)
+  p += `local _clk=os.clock;if _clk then local _st=_clk();for _=1,1500 do local _dummy=_*2 end;if _clk()-_st>5.2 then while true do end end end;`;
+  
+  // Anti-Tamper Top Tier (Seguro)
   p += `local _sc=string.char;local _t=type;local _ts=tostring;local _gm=getmetatable;local _d=debug;`;
+  // 1. Detección de modificación en metatabla de strings
   p += `if _t(_gm)=="function"then local _mt=_gm("")if _t(_mt)=="table"and _mt.__index then while true do end end end;`;
-  // Anti-Hook (Info Check)
+  // 2. Detección de Hooks en Lua verificando si es Closure en C
   p += `if _d and _t(_d.getinfo)=="function"then local _i=_d.getinfo(_sc)if _i and _i.what~="C"then while true do end end end;`;
+  // 3. Verificación estándar de nombres de funciones
+  p += `if _t(_sc)~="function"or _ts(_sc):lower():find("hook")or _ts(_sc):lower():find("closure")then while true do end end;`;
   return p;
 }
 
-// --- FUNCIÓN PRINCIPAL DE OFUSCACIÓN ---
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
 
   let preProcessed = detectAndApplyMappings(sourceCode);
-  const xorKeyBase = Math.floor(Math.random() * 200) + 50;
-  
+  const seed = Date.now() + Math.random() * 99999999;
+  const xorKeyBase = Math.floor(seed % 2147483647) + 1;
   const bytes = preProcessed.split('').map((char, i) => {
-    let val = char.charCodeAt(0) ^ (xorKeyBase + i);
+    let val = char.charCodeAt(0) ^ (xorKeyBase + i * 5);
+    val = val ^ (xorKeyBase >>> 4);
     return val & 0xFF;
   });
 
@@ -149,26 +156,29 @@ function obfuscate(sourceCode) {
   const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName();
 
   let innerCode = '';
-  innerCode += `local ${VM_DATA}={${bytes.join(',')}};`;
-  innerCode += `local ${XOR_KEY}=${xorKeyBase};`;
+  innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))};`;
+  innerCode += `local ${XOR_KEY}=${mba()};`;
   innerCode += `local ${PC}=1;local ${STACK}="";`;
-  innerCode += `local ${DECODER}=function() while ${PC}<=#${VM_DATA} do `;
-  innerCode += `local byte=${VM_DATA}[${PC}];`;
-  innerCode += `${STACK}=${STACK}..string.char(byte~(${XOR_KEY}+${PC}-1));`;
-  innerCode += `${PC}=${PC}+1; end return ${STACK}; end;`;
+  innerCode += `local ${DECODER}=function()`;
+  innerCode += generateJunk(20);
+  innerCode += `while ${PC}<=#${VM_DATA} do `;
+  innerCode += `local lM=${VM_DATA}[${PC}];`;
+  innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
+  innerCode += `${PC}=${PC}+1;`;
+  innerCode += `end;return ${STACK};end;`;
   
+  // Inyección de protecciones Top Tier
   innerCode += generateProtections();
+  
   innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
 
   let vm = HEADER + '\n';
-  vm += generateJunk(50);
+  vm += generateJunk(144);
   vm += buildVMWrapper(innerCode);
-  vm += generateJunk(50);
+  vm += generateJunk(126);
 
-  // Minificación final
-  vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s{0,}([=+\-\/{},;])\s{0,}/g, '$1');
+  vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
   return `return(function()${vm}end)();`;
 }
 
 module.exports = { obfuscate };
-    
