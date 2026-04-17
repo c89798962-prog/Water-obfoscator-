@@ -20,8 +20,7 @@ function pickHandlers(count) {
 
 function lightMath(n) {
   let a = Math.floor(Math.random() * 90) + 20, b = Math.floor(Math.random() * 60) + 10
-  // Eliminado el operador * por seguridad de sintaxis
-  return `(${n}+${a+b+100}-${a})`
+  return `(${n}+${a}*${b}-${a})`
 }
 
 function stringToMath(str) {
@@ -29,18 +28,18 @@ function stringToMath(str) {
 }
 
 function mba() {
-  let a = Math.floor(Math.random() * 70) + 15
-  // Simplificado para evitar divisiones y multiplicaciones complejas
-  return `(${a}-${a}+1)`
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`
 }
 
 function generateJunk(lines = 144) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
-    if (r < 0.25)      j += `local ${generateIlName()}=${Math.floor(Math.random() * 999)} `
+    if (r < 0.25)      j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 9999))} `
     else if (r < 0.5)  j += `local ${generateIlName()}=${mba()} `
-    else               j += `local ${generateIlName()}=string.char(${Math.floor(Math.random()*255)}) `
+    else if (r < 0.75) j += `local ${generateIlName()}=${lightMath(mba())} `
+    else               j += `local ${generateIlName()}=(${mba()}+${lightMath(Math.floor(Math.random() * 999))}) `
   }
   return j
 }
@@ -66,6 +65,7 @@ function detectAndApplyMappings(code) {
       else if (tech.includes("Table Indirection"))        { const t = generateIlName(); headers += `local ${t}={"${word}"} `; replacement = `${t}[1]` }
       else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`
       else if (tech.includes("Fake Flow"))                replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`
+      else if (tech.includes("Virtual Machine"))          replacement = `loadstring("return '${word}'")()` 
       regex.lastIndex = 0
       modified = modified.replace(regex, (match, prefix) => {
         if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`
@@ -81,41 +81,77 @@ function buildVMWrapper(innerCode) {
   const handlers = pickHandlers(handlerCount)
   const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = generateIlName()
+
   let out = ''
-  out += `local lM={} `
+
+  out += `local lM={`
+  for (let i = 1; i <= 8; i++) {
+    out += `[${i}]=${lightMath(Math.floor(Math.random() * 999))},`
+  }
+  out += `} `
+  out += `local lM=lM `
+
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
       out += `local ${handlers[i]}=function(lM) `
-      out += generateJunk(5)
+      out += `local lM=lM `
+      out += generateJunk(8)
       out += innerCode
-      out += ` end `
+      out += `end `
     } else {
-      out += `local ${handlers[i]}=function(lM) return lM end `
+      const junkCount = 3 + Math.floor(Math.random() * 6)
+      out += `local ${handlers[i]}=function(lM) `
+      out += `local lM=lM `
+      out += generateJunk(junkCount)
+      out += `return lM `
+      out += `end `
     }
   }
+
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) {
     out += `[${i + 1}]=${handlers[i]},`
   }
   out += `} `
+
   for (let i = 0; i < handlers.length; i++) {
     if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM) `
   }
+
   out += `${DISPATCH}[${realIdx + 1}](lM) `
+
   return out
 }
 
+function generateProtections() {
+  let p = ""
+  p += `local _clk=os.clock if _clk then local _st=_clk() for _=1,1500 do local _dummy=_*2 end if _clk()-_st>10.2 then while true do end end end `
+  
+  p += `local _sc=string.char local _t=type local _ts=tostring local _gm=getmetatable local _d=debug `
+  p += `if _t(_gm)=="function"then local _mt=_gm("")if _t(_mt)=="table"and _mt.__index then while true do end end end `
+  p += `if _d and _t(_d.getinfo)=="function"then local _i=_d.getinfo(_sc)if _i and _i.what~="C"then while true do end end end `
+  p += `if _t(_sc)~="function"or _ts(_sc):lower():find("hook")or _ts(_sc):lower():find("closure")then while true do end end `
+  return p
+}
+
+// Función minify extraída y adaptada a tu script
 function minify(code) {
-  return code.replace(/\s+/g, " ").trim().replace(/\s*([=+\-{},])\s*/g, '$1')
+  // Minificación que deja espacios estratégicos para que parezca una masa de texto
+  let minified = code.replace(/\s+/g, " ").trim();
+  // Aplicamos compresión adicional en operadores para ahorrar bytes sin romper Lua
+  return minified.replace(/\s*([=+\-*/{},])\s*/g, '$1');
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
+
   let preProcessed = detectAndApplyMappings(sourceCode)
-  const seed = Date.now()
-  const xorKeyBase = Math.floor(seed % 1000) + 1
+  const seed = Date.now() + Math.random() * 99999999
+  const xorKeyBase = Math.floor(seed % 2147483647) + 1
   const bytes = preProcessed.split('').map((char, i) => {
-    return (char.charCodeAt(0) ^ xorKeyBase) & 0xFF
+    let val = char.charCodeAt(0) ^ (xorKeyBase + i * 5)
+    val = val ^ (xorKeyBase >>> 4)
+    return val & 0xFF
   })
 
   const VM_DATA = generateIlName(), XOR_KEY = generateIlName()
@@ -123,23 +159,30 @@ function obfuscate(sourceCode) {
 
   let innerCode = ''
   innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))} `
-  innerCode += `local ${XOR_KEY}=${xorKeyBase} `
+  innerCode += `local ${XOR_KEY}=${mba()} `
   innerCode += `local ${PC}=1 local ${STACK}="" `
   innerCode += `local ${DECODER}=function() `
-  innerCode += `for ${PC}=1,table.concat(${VM_DATA}):len() do end ` // Reemplazo de # por lógica compatible
-  innerCode += `for _,v in pairs(${VM_DATA}) do `
-  innerCode += `${STACK}=${STACK}..string.char(bit32.bxor(v,${XOR_KEY})) `
+  innerCode += generateJunk(20)
+  innerCode += `while ${PC}<=#${VM_DATA} do `
+  innerCode += `local lM=${VM_DATA}[${PC}] `
+  innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY}) `
+  innerCode += `${PC}=${PC}+1 `
   innerCode += `end return ${STACK} end `
-  innerCode += `local payload=(loadstring or load)(${DECODER}()) if payload then payload() end `
+  
+  innerCode += generateProtections()
+  
+  innerCode += `local payload=(loadstring or load)(${DECODER}()) payload() `
 
   let vm = HEADER + '\n'
-  vm += generateJunk(50)
+  vm += generateJunk(144)
   vm += buildVMWrapper(innerCode)
-  vm += generateJunk(50)
+  vm += generateJunk(126)
+
+  // Llamada limpia a la función minify
   vm = minify(vm)
   
   return `return function() do do ${vm} end end end`
 }
 
 module.exports = { obfuscate }
-        
+  
