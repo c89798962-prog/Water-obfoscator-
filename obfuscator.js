@@ -20,7 +20,6 @@ function pickHandlers(count) {
 
 function lightMath(n) {
   let a = Math.floor(Math.random() * 90) + 20, b = Math.floor(Math.random() * 60) + 10
-  // Eliminado el operador * por seguridad de sintaxis
   return `(${n}+${a+b+100}-${a})`
 }
 
@@ -30,7 +29,6 @@ function stringToMath(str) {
 
 function mba() {
   let a = Math.floor(Math.random() * 70) + 15
-  // Simplificado para evitar divisiones y multiplicaciones complejas
   return `(${a}-${a}+1)`
 }
 
@@ -114,8 +112,6 @@ function obfuscate(sourceCode) {
   let preProcessed = detectAndApplyMappings(sourceCode)
   const seed = Date.now()
   const xorKeyBase = Math.floor(seed % 1000) + 1
-  
-  // Bytes puros de la clave XOR
   const bytes = preProcessed.split('').map((char, i) => {
     return (char.charCodeAt(0) ^ xorKeyBase) & 0xFF
   })
@@ -124,17 +120,15 @@ function obfuscate(sourceCode) {
   const STACK = generateIlName(), DECODER = generateIlName()
 
   let innerCode = ''
-  // FIX 1: Crear la tabla de Lua adecuadamente sin JSON.stringify
+  // CORRECCIÓN 1: Se eliminan corchetes JSON y se usa formato de tabla de Lua { }
   innerCode += `local ${VM_DATA}={${bytes.map(b => lightMath(b)).join(',')}} `
   innerCode += `local ${XOR_KEY}=${xorKeyBase} `
   innerCode += `local ${STACK}="" `
   innerCode += `local ${DECODER}=function() `
-  
-  // FIX 3: Eliminado el for vacío y cambiado "pairs" a "ipairs" para garantizar el orden de ensamblado
-  innerCode += `for _,v in ipairs(${VM_DATA}) do `
+  // CORRECCIÓN 3: Se elimina el bucle vacío ineficiente
+  innerCode += `for _,v in pairs(${VM_DATA}) do `
   innerCode += `${STACK}=${STACK}..string.char(bit32.bxor(v,${XOR_KEY})) `
   innerCode += `end return ${STACK} end `
-  
   innerCode += `local payload=(loadstring or load)(${DECODER}()) if payload then payload() end `
 
   let vm = HEADER + '\n'
@@ -143,9 +137,9 @@ function obfuscate(sourceCode) {
   vm += generateJunk(50)
   vm = minify(vm)
   
-  // FIX 2: Autoejecutar la función anónima en lugar de devolverla muerta
-  return `(function() do ${vm} end end)()`
+  // CORRECCIÓN 2: Se invoca la función inmediatamente para que el código se ejecute
+  return `(function() do do ${vm} end end end)()`
 }
 
 module.exports = { obfuscate }
-      
+        
