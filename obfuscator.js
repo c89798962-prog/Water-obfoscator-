@@ -18,13 +18,18 @@ function pickHandlers(count) {
   return result;
 }
 
+// CORRECCIÓN: Guardamos los offsets para poder revertirlos
+let offsetA = Math.floor(Math.random() * 90) + 20;
+let offsetB = Math.floor(Math.random() * 60) + 10;
+
 function lightMath(n) {
-  let a = Math.floor(Math.random() * 90) + 20, b = Math.floor(Math.random() * 60) + 10;
-  return `(${n}+${a}*${b}-${a})`;
+  return `(${n}+${offsetA}*${offsetB}-${offsetA})`;
 }
 
 function stringToMath(str) {
-  return `{${str.split('').map(c => lightMath(c.charCodeAt(0))).join(',')}}`;
+  // Convertimos a array de números si es string, o usamos el array si ya lo es
+  const data = typeof str === 'string' ? str.split('').map(c => c.charCodeAt(0)) : str;
+  return `{${data.map(n => lightMath(n)).join(',')}}`;
 }
 
 function mba() {
@@ -81,62 +86,38 @@ function buildVMWrapper(innerCode) {
   const handlers = pickHandlers(handlerCount);
   const realIdx = Math.floor(Math.random() * handlerCount);
   const DISPATCH = generateIlName();
+  const L_M_TABLE = generateIlName();
 
-  let out = '';
-
-  out += `local lM={`;
+  let out = `local ${L_M_TABLE}={};`;
   for (let i = 1; i <= 8; i++) {
-    out += `[${i}]=${lightMath(Math.floor(Math.random() * 999))},`;
+    out += `${L_M_TABLE}[${i}]=${lightMath(Math.floor(Math.random() * 999))};`;
   }
-  out += `};`;
-  out += `local lM=lM;`;
 
   for (let i = 0; i < handlers.length; i++) {
+    out += `local ${handlers[i]}=function(lM) `;
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM)`;
-      out += `local lM=lM;`;
-      out += generateJunk(8);
       out += innerCode;
-      out += `end;`;
     } else {
-      const junkCount = 3 + Math.floor(Math.random() * 6);
-      out += `local ${handlers[i]}=function(lM)`;
-      out += `local lM=lM;`;
-      out += generateJunk(junkCount);
-      out += `return lM;`;
-      out += `end;`;
+      out += generateJunk(5) + ` return lM;`;
     }
+    out += ` end; `;
   }
 
-  out += `local ${DISPATCH}={`;
+  out += `local ${DISPATCH}={${handlers.join(",")}}; `;
   for (let i = 0; i < handlers.length; i++) {
-    out += `[${i + 1}]=${handlers[i]},`;
+    if (i !== realIdx) out += `${DISPATCH}[${i + 1}](${L_M_TABLE});`;
   }
-  out += `};`;
-
-  for (let i = 0; i < handlers.length; i++) {
-    if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM);`;
-  }
-
-  out += `${DISPATCH}[${realIdx + 1}](lM);`;
+  out += `${DISPATCH}[${realIdx + 1}](${L_M_TABLE});`;
 
   return out;
 }
 
-// --- PROTECCIONES AVANZADAS DE NIVEL TOP ---
 function generateProtections() {
   let p = "";
-  // Anti-Debug (Time Check intacto)
-  p += `local _clk=os.clock;if _clk then local _st=_clk();for _=1,1500 do local _dummy=_*2 end;if _clk()-_st>1.2 then while true do end end end;`;
-  
-  // Anti-Tamper Top Tier (Seguro)
-  p += `local _sc=string.char;local _t=type;local _ts=tostring;local _gm=getmetatable;local _d=debug;`;
-  // 1. Detección de modificación en metatabla de strings
+  // Aumentamos el tiempo a 5.2 para evitar falsos positivos por el lag de la propia VM
+  p += `local _clk=os.clock;if _clk then local _st=_clk();for _=1,1000 do end;if _clk()-_st>5.2 then while true do end end end;`;
+  p += `local _sc=string.char;local _t=type;local _ts=tostring;local _gm=getmetatable;`;
   p += `if _t(_gm)=="function"then local _mt=_gm("")if _t(_mt)=="table"and _mt.__index then while true do end end end;`;
-  // 2. Detección de Hooks en Lua verificando si es Closure en C
-  p += `if _d and _t(_d.getinfo)=="function"then local _i=_d.getinfo(_sc)if _i and _i.what~="C"then while true do end end end;`;
-  // 3. Verificación estándar de nombres de funciones
-  p += `if _t(_sc)~="function"or _ts(_sc):lower():find("hook")or _ts(_sc):lower():find("closure")then while true do end end;`;
   return p;
 }
 
@@ -144,41 +125,37 @@ function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
 
   let preProcessed = detectAndApplyMappings(sourceCode);
-  const seed = Date.now() + Math.random() * 99999999;
-  const xorKeyBase = Math.floor(seed % 2147483647) + 1;
-  const bytes = preProcessed.split('').map((char, i) => {
-    let val = char.charCodeAt(0) ^ (xorKeyBase + i * 5);
-    val = val ^ (xorKeyBase >>> 4);
-    return val & 0xFF;
-  });
+  
+  // CIFRADO XOR SIMPLE
+  const xorKey = Math.floor(Math.random() * 100) + 1;
+  const bytes = preProcessed.split('').map(char => char.charCodeAt(0) ^ xorKey);
 
   const VM_DATA = generateIlName(), XOR_KEY = generateIlName();
   const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName();
 
   let innerCode = '';
-  innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))};`;
-  innerCode += `local ${XOR_KEY}=${mba()};`;
+  // Convertimos los bytes ya cifrados en la tabla matemática
+  innerCode += `local ${VM_DATA}=${stringToMath(bytes)};`;
+  innerCode += `local ${XOR_KEY}=${xorKey};`;
   innerCode += `local ${PC}=1;local ${STACK}="";`;
-  innerCode += `local ${DECODER}=function()`;
-  innerCode += generateJunk(20);
-  innerCode += `while ${PC}<=#${VM_DATA} do `;
-  innerCode += `local lM=${VM_DATA}[${PC}];`;
-  innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
-  innerCode += `${PC}=${PC}+1;`;
-  innerCode += `end;return ${STACK};end;`;
+  innerCode += `local ${DECODER}=function() while ${PC}<=#${VM_DATA} do `;
+  // CORRECCIÓN CLAVE: Restamos el offset matemático antes de aplicar el XOR
+  innerCode += `local _v = ${VM_DATA}[${PC}] - (${offsetA}*${offsetB}-${offsetA}); `;
+  innerCode += `${STACK}=${STACK}..string.char(_v ^ ${XOR_KEY}); `;
+  innerCode += `${PC}=${PC}+1; end; return ${STACK}; end; `;
   
-  // Inyección de protecciones Top Tier
   innerCode += generateProtections();
-  
-  innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
+  innerCode += `local _p=(loadstring or load)(${DECODER}()); if _p then _p() end;`;
 
   let vm = HEADER + '\n';
-  vm += generateJunk(144);
+  vm += generateJunk(20); // Bajamos un poco el junk inicial para estabilidad
   vm += buildVMWrapper(innerCode);
-  vm += generateJunk(126);
+  vm += generateJunk(20);
 
-  vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
+  // Minificado
+  vm = vm.replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
   return `return(function()${vm}end)();`;
 }
 
 module.exports = { obfuscate };
+    
