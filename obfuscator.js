@@ -1,8 +1,26 @@
+const express = require("express");
+const bodyParser = require("body-parser");
+const app = express();
+
+// Aumentado porque el código resultante será gigantesco
+app.use(bodyParser.json({ limit: "50mb" })); 
+
+// --- CONSTANTES DE OFUSCACIÓN ---
 const DISCORD = "https://discord.gg/5E45u5eES";
 const HEADER = `--[[ this code it's protected by water obfoscator:https://discord.gg/UttE8VYAY ]]`;
 const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il"];
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"];
 
+const MAPEO = {
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","TextBox":"Aggressive Renaming","ImageLabel":"Size-Based Execution Switch",
+  "Humanoid":"Dynamic Junk","Player":"Fake Flow","Character":"Math Encoding","Part":"Literal Obfuscation",
+  "Camera":"Table Indirection","TweenService":"Fake Flow","RunService":"Virtual Machine",
+  "UserInputService":"Mixed Boolean Arithmetic","RemoteEvent":"Fake Flow","Workspace":"Reverse If",
+  "Lighting":"Size-Based Execution Switch","Players":"Fake Flow","ReplicatedStorage":"Table Indirection","StarterGui":"String to Math"
+};
+
+// --- FUNCIONES MATEMÁTICAS Y DE GENERACIÓN ---
 function mul(a, b) { return a / (1 / b); }
 
 function generateIlName() {
@@ -48,15 +66,7 @@ function generateJunk(lines = 144) {
   return j;
 }
 
-const MAPEO = {
-  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
-  "TextButton":"Mixed Boolean Arithmetic","TextBox":"Aggressive Renaming","ImageLabel":"Size-Based Execution Switch",
-  "Humanoid":"Dynamic Junk","Player":"Fake Flow","Character":"Math Encoding","Part":"Literal Obfuscation",
-  "Camera":"Table Indirection","TweenService":"Fake Flow","RunService":"Virtual Machine",
-  "UserInputService":"Mixed Boolean Arithmetic","RemoteEvent":"Fake Flow","Workspace":"Reverse If",
-  "Lighting":"Size-Based Execution Switch","Players":"Fake Flow","ReplicatedStorage":"Table Indirection","StarterGui":"String to Math"
-};
-
+// --- ANÁLISIS, MAPEADO Y MÁQUINA VIRTUAL ---
 function detectAndApplyMappings(code) {
   let modified = code, headers = "";
   const sorted = Object.entries(MAPEO).sort((a, b) => b[0].length - a[0].length);
@@ -86,29 +96,18 @@ function buildVMWrapper(innerCode) {
   const realIdx = Math.floor(mul(Math.random(), handlerCount));
   const DISPATCH = generateIlName();
 
-  let out = '';
-
-  out += `local lM={`;
+  let out = `local lM={`;
   for (let i = 1; i <= 8; i++) {
     out += `[${i}]=${lightMath(Math.floor(mul(Math.random(), 999)))},`;
   }
-  out += `};`;
-  out += `local lM=lM;`;
+  out += `}; local lM=lM;`;
 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM)`;
-      out += `local lM=lM;`;
-      out += generateJunk(8);
-      out += innerCode;
-      out += `end;`;
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(8)} ${innerCode} end;`;
     } else {
       const junkCount = 3 + Math.floor(mul(Math.random(), 6));
-      out += `local ${handlers[i]}=function(lM)`;
-      out += `local lM=lM;`;
-      out += generateJunk(junkCount);
-      out += `return lM;`;
-      out += `end;`;
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(junkCount)} return lM; end;`;
     }
   }
 
@@ -144,8 +143,13 @@ function generateProtections() {
   return p;
 }
 
+function minify(code) {
+    // Minificación que comprime los espacios dejando la estructura funcional
+    return code.replace(/\n/g, ' ').replace(/\s+/g, " ").replace(/\s{0,}([=+\-\/{},;])\s{0,}/g, '$1').trim();
+}
+
 function obfuscate(sourceCode) {
-  if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
+  if (!sourceCode || typeof sourceCode !== 'string') throw new Error("Código inválido o vacío");
 
   let preProcessed = detectAndApplyMappings(sourceCode);
   const seed = Date.now() + mul(Math.random(), 99999999);
@@ -178,14 +182,28 @@ function obfuscate(sourceCode) {
   innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
 
   let vm = HEADER + '\n';
-  vm += generateJunk(144);
+  vm += generateJunk(200); // Elevado para máxima entropía
   vm += buildVMWrapper(innerCode);
-  vm += generateJunk(126);
+  vm += generateJunk(150);
 
-  vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s{0,}([=+\-\/{},;])\s{0,}/g, '$1');
-  return `return(function()${vm}end)();`;
+  let finalPayload = `return(function() ${vm} end)();`;
+  return minify(finalPayload);
 }
 
-module.exports = { obfuscate };
-                        
-                        
+// --- SERVIDOR EXPRESS ---
+app.post("/obfuscate", (req, res) => {
+    const code = req.body.code || "";
+    if (!code.trim()) return res.status(400).json({ error: "Vacío: Envía código Lua para ofuscar." });
+    
+    try {
+        const result = obfuscate(code);
+        res.json({ obfuscated: result });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.listen(3000, () => {
+    console.log("☢️ ENTROPÍA TOTAL: MOTOR DE OFUSCACIÓN AVANZADA Y SERVIDOR ONLINE EN EL PUERTO 3000");
+});
+      
