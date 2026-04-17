@@ -1,7 +1,6 @@
 const DISCORD = "https://discord.gg/5E45u5eES";
 const HEADER = `--[[ this code it's protected by water obfoscator:https://discord.gg/UttE8VYAY ]]`;
-// Actualizado el pool para incluir i1, i2, i3 y priorizar v1, v2, v3
-const IL_POOL = ["i1","i2","i3","v1","v2","v3","I1","l1","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il"];
+const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il"];
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"];
 
 function generateIlName() {
@@ -33,8 +32,7 @@ function mba() {
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// Reducido a la mitad (antes 144, ahora 72 por defecto)
-function generateJunk(lines = 72) {
+function generateJunk(lines = 144) {
   let j = '';
   for (let i = 0; i < lines; i++) {
     const r = Math.random();
@@ -97,11 +95,11 @@ function buildVMWrapper(innerCode) {
     if (i === realIdx) {
       out += `local ${handlers[i]}=function(lM)`;
       out += `local lM=lM;`;
-      out += generateJunk(4); // 50% reducido (antes 8)
+      out += generateJunk(8);
       out += innerCode;
       out += `end;`;
     } else {
-      const junkCount = Math.floor((3 + Math.floor(Math.random() * 6)) / 2); // 50% reducido
+      const junkCount = 3 + Math.floor(Math.random() * 6);
       out += `local ${handlers[i]}=function(lM)`;
       out += `local lM=lM;`;
       out += generateJunk(junkCount);
@@ -162,7 +160,7 @@ function obfuscate(sourceCode) {
   innerCode += `local ${XOR_KEY}=${mba()};`;
   innerCode += `local ${PC}=1;local ${STACK}="";`;
   innerCode += `local ${DECODER}=function()`;
-  innerCode += generateJunk(10); // 50% reducido (antes 20)
+  innerCode += generateJunk(20);
   innerCode += `while ${PC}<=#${VM_DATA} do `;
   innerCode += `local lM=${VM_DATA}[${PC}];`;
   innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
@@ -175,13 +173,12 @@ function obfuscate(sourceCode) {
   innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
 
   let vm = HEADER + '\n';
-  vm += generateJunk(72); // 50% reducido (antes 144)
+  vm += generateJunk(144);
   vm += buildVMWrapper(innerCode);
-  vm += generateJunk(63); // 50% reducido (antes 126)
+  vm += generateJunk(126);
 
   vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
   return `return(function()${vm}end)();`;
 }
 
 module.exports = { obfuscate };
-    
