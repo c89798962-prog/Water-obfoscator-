@@ -20,7 +20,7 @@ function pickHandlers(count) {
 
 function lightMath(n) {
   let a = Math.floor(Math.random() * 90) + 20, b = Math.floor(Math.random() * 60) + 10
-  return `(${n}+${a}*${b}-${a})`
+  return `(${n}+${a}*${b}-${a}*${b})` // Corregido: la resta vuelve a anular la multiplicación para que el resultado matemático sea exacto a 'n'
 }
 
 function stringToMath(str) {
@@ -32,14 +32,15 @@ function mba() {
   return `((${n}*${a}-${a})/(${b}+1)+${n})`
 }
 
-function generateJunk(lines = 144) {
-  let j = ''
+// CORRECCIÓN BUG 5: Evita el desbordamiento de "locals" reasignando una sola variable
+function generateJunk(lines = 50) {
+  let j = `local _j=0 `
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
-    if (r < 0.25)      j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 9999))} `
-    else if (r < 0.5)  j += `local ${generateIlName()}=${mba()} `
-    else if (r < 0.75) j += `local ${generateIlName()}=${lightMath(mba())} `
-    else               j += `local ${generateIlName()}=(${mba()}+${lightMath(Math.floor(Math.random() * 999))}) `
+    if (r < 0.25)      j += `_j=${lightMath(Math.floor(Math.random() * 9999))} `
+    else if (r < 0.5)  j += `_j=${mba()} `
+    else if (r < 0.75) j += `_j=${lightMath(mba())} `
+    else               j += `_j=(${mba()}+${lightMath(Math.floor(Math.random() * 999))}) `
   }
   return j
 }
@@ -61,11 +62,12 @@ function detectAndApplyMappings(code) {
     if (regex.test(modified)) {
       let replacement = `"${word}"`
       if (tech.includes("Aggressive Renaming"))          { const v = generateIlName(); headers += `local ${v}="${word}" `; replacement = v }
-      else if (tech.includes("String to Math"))           replacement = `string.char(${stringToMath(word)})`
+      else if (tech.includes("String to Math"))           replacement = `string.char(unpack(${stringToMath(word)}))`
       else if (tech.includes("Table Indirection"))        { const t = generateIlName(); headers += `local ${t}={"${word}"} `; replacement = `${t}[1]` }
       else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`
       else if (tech.includes("Fake Flow"))                replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`
-      else if (tech.includes("Virtual Machine"))          replacement = `loadstring("return '${word}'")()` 
+      // CORRECCIÓN BUG 4: Reemplazo seguro de Virtual Machine en lugar de loadstring
+      else if (tech.includes("Virtual Machine"))          replacement = `(function() return "${word}" end)()` 
       regex.lastIndex = 0
       modified = modified.replace(regex, (match, prefix) => {
         if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`
@@ -95,7 +97,7 @@ function buildVMWrapper(innerCode) {
     if (i === realIdx) {
       out += `local ${handlers[i]}=function(lM) `
       out += `local lM=lM `
-      out += generateJunk(8)
+      out += generateJunk(5)
       out += innerCode
       out += `end `
     } else {
@@ -126,7 +128,6 @@ function buildVMWrapper(innerCode) {
 function generateProtections() {
   let p = ""
   p += `local _clk=os.clock if _clk then local _st=_clk() for _=1,1500 do local _dummy=_*2 end if _clk()-_st>10.2 then while true do end end end `
-  
   p += `local _sc=string.char local _t=type local _ts=tostring local _gm=getmetatable local _d=debug `
   p += `if _t(_gm)=="function"then local _mt=_gm("")if _t(_mt)=="table"and _mt.__index then while true do end end end `
   p += `if _d and _t(_d.getinfo)=="function"then local _i=_d.getinfo(_sc)if _i and _i.what~="C"then while true do end end end `
@@ -134,38 +135,40 @@ function generateProtections() {
   return p
 }
 
-// Función minify extraída y adaptada a tu script
+// CORRECCIÓN BUG 6: Minificación segura que no destruye la separación de palabras clave
 function minify(code) {
-  // Minificación que deja espacios estratégicos para que parezca una masa de texto
   let minified = code.replace(/\s+/g, " ").trim();
-  // Aplicamos compresión adicional en operadores para ahorrar bytes sin romper Lua
-  return minified.replace(/\s*([=+\-*/{},])\s*/g, '$1');
+  // Solo eliminamos espacios alrededor de operadores donde es 100% seguro en Lua
+  return minified.replace(/\s*([+*\/\[\]{}])\s*/g, '$1').replace(/\s*=\s*/g, '=');
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
 
   let preProcessed = detectAndApplyMappings(sourceCode)
-  const seed = Date.now() + Math.random() * 99999999
-  const xorKeyBase = Math.floor(seed % 2147483647) + 1
-  const bytes = preProcessed.split('').map((char, i) => {
-    let val = char.charCodeAt(0) ^ (xorKeyBase + i * 5)
-    val = val ^ (xorKeyBase >>> 4)
-    return val & 0xFF
-  })
+  
+  // CORRECCIÓN BUG 2: Reemplazamos XOR por Shift (Suma dinámica segura y compatible en Lua sin bits)
+  const shiftKey = Math.floor(Math.random() * 200) + 10;
+  const bytes = preProcessed.split('').map((char) => {
+    return (char.charCodeAt(0) + shiftKey) % 256;
+  });
 
-  const VM_DATA = generateIlName(), XOR_KEY = generateIlName()
+  const VM_DATA = generateIlName(), SHIFT_KEY = generateIlName()
   const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName()
 
   let innerCode = ''
-  innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))} `
-  innerCode += `local ${XOR_KEY}=${mba()} `
+  
+  // CORRECCIÓN BUG 1: Array mapeado directamente sin JSON.stringify()
+  const mathBytes = bytes.map(b => lightMath(b)).join(',');
+  innerCode += `local ${VM_DATA}={${mathBytes}} `
+  innerCode += `local ${SHIFT_KEY}=${lightMath(shiftKey)} `
   innerCode += `local ${PC}=1 local ${STACK}="" `
   innerCode += `local ${DECODER}=function() `
-  innerCode += generateJunk(20)
+  innerCode += generateJunk(10)
   innerCode += `while ${PC}<=#${VM_DATA} do `
   innerCode += `local lM=${VM_DATA}[${PC}] `
-  innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY}) `
+  // Decodificador nativo usando aritmética básica en lugar de XOR
+  innerCode += `${STACK}=${STACK}..string.char((lM - ${SHIFT_KEY}) % 256) `
   innerCode += `${PC}=${PC}+1 `
   innerCode += `end return ${STACK} end `
   
@@ -174,15 +177,15 @@ function obfuscate(sourceCode) {
   innerCode += `local payload=(loadstring or load)(${DECODER}()) payload() `
 
   let vm = HEADER + '\n'
-  vm += generateJunk(144)
+  vm += generateJunk(20)
   vm += buildVMWrapper(innerCode)
-  vm += generateJunk(126)
+  vm += generateJunk(20)
 
-  // Llamada limpia a la función minify
   vm = minify(vm)
   
-  return `return function() do do ${vm} end end end`
+  // CORRECCIÓN BUG 3: Envuelve en un bloque 'do' autoejecutable, no en un return function()
+  return `do ${vm} end`
 }
 
 module.exports = { obfuscate }
-  
+        
