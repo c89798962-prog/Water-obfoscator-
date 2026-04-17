@@ -114,22 +114,27 @@ function obfuscate(sourceCode) {
   let preProcessed = detectAndApplyMappings(sourceCode)
   const seed = Date.now()
   const xorKeyBase = Math.floor(seed % 1000) + 1
+  
+  // Bytes puros de la clave XOR
   const bytes = preProcessed.split('').map((char, i) => {
     return (char.charCodeAt(0) ^ xorKeyBase) & 0xFF
   })
 
   const VM_DATA = generateIlName(), XOR_KEY = generateIlName()
-  const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName()
+  const STACK = generateIlName(), DECODER = generateIlName()
 
   let innerCode = ''
-  innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))} `
+  // FIX 1: Crear la tabla de Lua adecuadamente sin JSON.stringify
+  innerCode += `local ${VM_DATA}={${bytes.map(b => lightMath(b)).join(',')}} `
   innerCode += `local ${XOR_KEY}=${xorKeyBase} `
-  innerCode += `local ${PC}=1 local ${STACK}="" `
+  innerCode += `local ${STACK}="" `
   innerCode += `local ${DECODER}=function() `
-  innerCode += `for ${PC}=1,table.concat(${VM_DATA}):len() do end ` // Reemplazo de # por lógica compatible
-  innerCode += `for _,v in pairs(${VM_DATA}) do `
+  
+  // FIX 3: Eliminado el for vacío y cambiado "pairs" a "ipairs" para garantizar el orden de ensamblado
+  innerCode += `for _,v in ipairs(${VM_DATA}) do `
   innerCode += `${STACK}=${STACK}..string.char(bit32.bxor(v,${XOR_KEY})) `
   innerCode += `end return ${STACK} end `
+  
   innerCode += `local payload=(loadstring or load)(${DECODER}()) if payload then payload() end `
 
   let vm = HEADER + '\n'
@@ -138,8 +143,9 @@ function obfuscate(sourceCode) {
   vm += generateJunk(50)
   vm = minify(vm)
   
-  return `return function() do do ${vm} end end end`
+  // FIX 2: Autoejecutar la función anónima en lugar de devolverla muerta
+  return `(function() do ${vm} end end)()`
 }
 
 module.exports = { obfuscate }
-    
+      
