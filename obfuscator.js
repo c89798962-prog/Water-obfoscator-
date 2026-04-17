@@ -2,6 +2,18 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
 
+// --- CONFIGURACIÓN PARA RAILWAY Y CORS ---
+// Permite peticiones desde cualquier origen (útil si llamas a la API desde una web)
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
 // Aumentado porque el código resultante será gigantesco
 app.use(bodyParser.json({ limit: "50mb" })); 
 
@@ -182,7 +194,7 @@ function obfuscate(sourceCode) {
   innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
 
   let vm = HEADER + '\n';
-  vm += generateJunk(200); // Elevado para máxima entropía
+  vm += generateJunk(200); 
   vm += buildVMWrapper(innerCode);
   vm += generateJunk(150);
 
@@ -203,7 +215,10 @@ app.post("/obfuscate", (req, res) => {
     }
 });
 
-app.listen(3000, () => {
-    console.log("☢️ ENTROPÍA TOTAL: MOTOR DE OFUSCACIÓN AVANZADA Y SERVIDOR ONLINE EN EL PUERTO 3000");
+// --- SOLUCIÓN PARA RAILWAY ---
+// 1. Usar process.env.PORT
+// 2. Usar "0.0.0.0" para que Railway escuche correctamente
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`☢️ ENTROPÍA TOTAL: MOTOR ONLINE EN EL PUERTO ${PORT}`);
 });
-      
