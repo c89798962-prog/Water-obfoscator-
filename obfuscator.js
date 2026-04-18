@@ -2,21 +2,27 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
 
-app.use(bodyParser.json({ limit: "2mb" })); // Aumentado porque el código será GIGANTE
+// Middleware con límite aumentado para soportar scripts grandes
+app.use(bodyParser.json({ limit: "5mb" })); 
 
-// 🧬 GENERADOR DE VARIABLES TIPO "MURO DE CARACTERES"
+/**
+ * 🧬 GENERADOR DE VARIABLES TIPO "MURO DE CARACTERES"
+ * Crea nombres de variables extremadamente difíciles de distinguir (I, l, 1, v)
+ */
 function rn() {
     const chars = ["I", "l", "v", "1", "2", "3"];
     const starters = ["I", "l", "v"]; 
     let res = starters[Math.floor(Math.random() * starters.length)];
-    // Variables de 20 caracteres para máximo desorden visual
     for (let i = 0; i < 20; i++) {
         res += chars[Math.floor(Math.random() * chars.length)];
     }
     return res;
 }
 
-// 🧮 MATH CODE ULTRA-AGRESIVO (90% de densidad)
+/**
+ * 🧮 MATH CODE ULTRA-AGRESIVO
+ * Ofusca números mediante operaciones redundantes
+ */
 function math(n) {
     let a = Math.floor(Math.random() * 100) + 1;
     let b = Math.floor(Math.random() * 50) + 1;
@@ -29,7 +35,10 @@ function math(n) {
     return `((${n}+${a}+${b})-${b}-${a})`;
 }
 
-// 🌪️ GENERADOR DE "SOPA DE LUA" (Junk masivo y anidado)
+/**
+ * 🌪️ GENERADOR DE "SOPA DE LUA" (Junk Code)
+ * Inserta código inútil para confundir descompiladores y humanos
+ */
 function junk(lines = 200) {
     let o = "";
     for (let i = 0; i < lines; i++) {
@@ -45,15 +54,29 @@ function junk(lines = 200) {
     return o;
 }
 
-// 💀 LA MÁQUINA DEL APOCALIPSIS (VM fragmentada y caótica)
+/**
+ * 🔧 CONVERTIDOR DE STRING A TABLA OFUSCADA
+ */
+function stringToTable(str) {
+    let arr = [];
+    for (let i = 0; i < str.length; i++) {
+        arr.push(math(str.charCodeAt(i)));
+    }
+    return "{" + arr.join(",") + "}";
+}
+
+/**
+ * 💀 LA MÁQUINA DEL APOCALIPSIS (Virtual Machine fragmentada)
+ */
 function VM(arr) {
     let d = rn(), f = rn(), l = rn(), a = rn(), r = rn(), i = rn();
     let tablePart1 = rn(), tablePart2 = rn();
     
-    // Dividimos la tabla en dos para duplicar el desorden
     const splitIndex = Math.floor(arr.length / 2);
-    const p1 = arr.slice(0, arr.lastIndexOf(',', splitIndex)) + "}";
-    const p2 = "{" + arr.slice(arr.lastIndexOf(',', splitIndex) + 1);
+    const lastComma = arr.lastIndexOf(',', splitIndex);
+    
+    const p1 = arr.slice(0, lastComma) + "}";
+    const p2 = "{" + arr.slice(lastComma + 1);
 
     return `
         ${junk(40)}
@@ -81,22 +104,20 @@ function VM(arr) {
 }
 
 function minify(code) {
-    // Minificación que deja espacios estratégicos para que parezca una masa de texto
     return code.replace(/\s+/g, " ").trim();
 }
 
 function advancedScanner(code) {
     let headList = [];
     const placeholders = [];
-    // Protegemos strings
     const protectRegex = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g;
+    
     let safeCode = code.replace(protectRegex, (m) => {
         const id = `__T${placeholders.length}__`;
         placeholders.push(m);
         return id;
     });
 
-    // Ofuscamos incluso las palabras comunes de Lua (local, function, then)
     const keywords = ["Workspace", "Players", "Character", "Humanoid", "FindFirstChild", "WaitForChild"];
     
     keywords.forEach(word => {
@@ -106,7 +127,6 @@ function advancedScanner(code) {
         safeCode = safeCode.replace(regex, `[${v}]`);
     });
 
-    // Desordenar cabeceras 200%
     headList.sort(() => Math.random() - 0.5);
     
     placeholders.forEach((s, i) => {
@@ -116,11 +136,13 @@ function advancedScanner(code) {
     return { headers: headList.join(""), code: safeCode };
 }
 
+/**
+ * 🌪️ FUNCIÓN PRINCIPAL DE OFUSCACIÓN
+ */
 function obfuscate(code) {
     let { headers, code: pre } = advancedScanner(code);
     let table = stringToTable(pre);
     
-    // Inyectamos junk en dosis letales
     let finalPayload = `
         ${junk(100)} 
         ${headers} 
@@ -132,15 +154,29 @@ function obfuscate(code) {
     return `return (function() ${minify(finalPayload)} end)()`;
 }
 
+// ENDPOINTS
 app.post("/obfuscate", (req, res) => {
     const code = req.body.code || "";
-    if (!code.trim()) return res.status(400).json({ error: "Vacío" });
+    if (!code.trim()) return res.status(400).json({ error: "El código está vacío" });
     try {
-        res.json({ obfuscated: obfuscate(code) });
+        const result = obfuscate(code);
+        res.json({ obfuscated: result });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-app.listen(3000, () => console.log("☢️ ENTROPÍA TOTAL: CÓDIGO GIGANTE Y DESORDENADO ONLINE"));
-                      
+// Ruta de prueba para verificar que el servidor vive
+app.get("/", (req, res) => {
+    res.send("☢️ Servidor de Entropía Total operativo.");
+});
+
+// CONFIGURACIÓN DE PUERTO PARA RAILWAY
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`☢️ SERVIDOR ACTIVO EN PUERTO: ${PORT}`);
+});
+
+// EXPORTACIÓN REQUERIDA
+module.exports = { obfuscate };
+            
