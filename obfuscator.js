@@ -1,8 +1,8 @@
 const DISCORD = "https://discord.gg/UttE8VYAY"
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
-const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
-const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv","I2","l2","vI","Iv"]
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"]
 
 function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
@@ -49,67 +49,60 @@ function applyCFF(blocks) {
   return lua
 }
 
-function buildTrueVM(payloadBytes) {
+// ESTA ES LA VM EXTREMA QUE PEDISTE
+function buildExtremeVM(payload) {
   const STACK = generateIlName()
   const MEM = generateIlName()
   const PTR = generateIlName()
+  const KEY = generateIlName()
   
-  let vmCore = `local ${STACK}={} local ${MEM}={${payloadBytes.map(b => heavyMath(b)).join(',')}} `
-  vmCore += `local ${PTR}=${heavyMath(1)} while ${PTR}<=(#${MEM}) do `
-  vmCore += `table.insert(${STACK}, string.char(${MEM}[${PTR}])) ${PTR}=${PTR}+${heavyMath(1)} end `
-  vmCore += `local _e = "" for _,v in pairs(${STACK}) do _e=_e..v end assert(loadstring(_e))() `
+  const seed = Math.floor(Math.random() * 250) + 1
+  const bytes = payload.split('').map(c => c.charCodeAt(0))
   
-  return vmCore
-}
-
-function buildDoubleVM(payloadBytes) {
-  const innerVM = buildTrueVM(payloadBytes)
-  return buildSingleVM(innerVM, 7)
-}
-
-function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount)
-  const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = generateIlName()
-  let out = `local lM={} ` 
-  for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(10)} ${innerCode} end `
-    } else {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return nil end `
-    }
+  // CIFRADO POR ENCADENAMIENTO: Cada byte depende del anterior
+  let encryptedBytes = []
+  let last = seed
+  for (let b of bytes) {
+    let encrypted = b ^ last
+    encryptedBytes.push(encrypted)
+    last = encrypted
   }
-  out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
-  out += `} `
-  let execBlocks = []
-  for (let i = 0; i < handlers.length; i++) {
-    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
-  }
-  out += applyCFF(execBlocks)
+
+  let out = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+  out += `local ${MEM}={${encryptedBytes.map(b => heavyMath(b)).join(',')}} `
+  out += `local ${PTR}=1 while ${PTR}<=#${MEM} do `
+  out += `local _cur=${MEM}[${PTR}] `
+  out += `table.insert(${STACK}, string.char(bit32.bxor(_cur, ${KEY}))) `
+  out += `${KEY}=_cur ${PTR}=${PTR}+1 end `
+  out += `local _res=table.concat(${STACK}) ${STACK}=nil `
+  out += `assert(loadstring(_res))() `
+  
   return out
+}
+
+function buildDoubleVM(payload) {
+  // Metemos la VM EXTREMA dentro de tu sistema original de handlers
+  return buildSingleVM(buildExtremeVM(payload), 7)
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
   
-  let rawPayload = ""
+  let payload = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
 
   if (match) {
     const url = match[1]
-    const urlBytes = url.split('').map(c => c.charCodeAt(0)).join(',')
-    rawPayload = `loadstring(game:HttpGet(string.char(${urlBytes})))()`
+    // La URL ahora se inyecta como un flujo de bytes encadenados
+    payload = `loadstring(game:HttpGet(string.char(${url.split('').map(c => c.charCodeAt(0)).join(',')})))()`
   } else {
-    rawPayload = sourceCode
+    payload = sourceCode
   }
 
-  const payloadBytes = rawPayload.split('').map(c => c.charCodeAt(0))
-  const finalVM = buildDoubleVM(payloadBytes)
-  
-  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${finalVM}`
+  const finalVM = buildDoubleVM(payload)
+  const result = `${HEADER} ${generateJunk(60)} ${antiDebug} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
