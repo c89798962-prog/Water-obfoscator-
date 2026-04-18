@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+Si agrego comandos puedo poner la función de esos comandos en index.js const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
 const { obfuscate } = require('./obfuscator');
 const https = require('https');
 const http = require('http');
@@ -19,12 +19,6 @@ const command = new SlashCommandBuilder()
   .addStringOption(o => o.setName('code').setDescription('Paste your Lua code directly').setRequired(false))
   .addAttachmentOption(o => o.setName('file').setDescription('Upload a .lua file to obfuscate').setRequired(false));
 
-const messageCommand = new SlashCommandBuilder()
-  .setName('message')
-  .setDescription('Send a message to a channel')
-  .addChannelOption(o => o.setName('channel').setDescription('The channel').setRequired(true))
-  .addStringOption(o => o.setName('message').setDescription('The message').setRequired(true));
-
 function fetchURL(url) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith('https') ? https : http;
@@ -35,25 +29,12 @@ function fetchURL(url) {
 client.once('ready', async () => {
   console.log(`Online as ${client.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), { body: [command.toJSON(), messageCommand.toJSON()] });
+  await rest.put(Routes.applicationCommands(client.user.id), { body: [command.toJSON()] });
   console.log('Slash command /obf registered.');
 });
 
 client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  if (interaction.commandName === 'message') {
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return interaction.reply({ content: "You don't a admin", ephemeral: true });
-    }
-    const chan = interaction.options.getChannel('channel');
-    const msg = interaction.options.getString('message');
-    const embed = new EmbedBuilder().setColor(0x000000).setDescription(msg);
-    await chan.send({ embeds: [embed] });
-    return interaction.reply({ content: 'Sent', ephemeral: true });
-  }
-
-  if (interaction.commandName !== 'obf') return;
+  if (!interaction.isChatInputCommand() || interaction.commandName !== 'obf') return;
 
   const codeOption = interaction.options.getString('code');
   const fileOption = interaction.options.getAttachment('file');
@@ -91,4 +72,4 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-client.login(TOKEN);
+client.login(TOKEN);?
