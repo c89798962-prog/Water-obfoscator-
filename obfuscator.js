@@ -123,21 +123,22 @@ function buildVMWrapper(innerCode) {
   return out;
 }
 
+// 🛡️ PROTECCIONES: Anti-Debug y Anti-Tamper Básicos y Funcionales
+function generateProtections() {
+  let p = "";
+  // Anti-Debug: Comprueba si el procesador tarda demasiado (indicio de que hay un humano pausando el código).
+  p += `local _clk=os.clock; if _clk then local _t=_clk(); for _=1,1500 do end; if _clk()-_t>3.5 then while true do end end end; `;
+  // Anti-Tamper: Verifica si alguien intentó modificar o "hookear" string.char para robar el payload.
+  p += `if type(string.char)~="function" or tostring(string.char):lower():find("hook") then while true do end end; `;
+  return p;
+}
+
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
 
-  // 1. SI ES UN SCRIPT DE CARGA (Oculta la URL y mantiene la estructura para ejecutar)
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
-  const match = sourceCode.match(isLoadstringRegex);
+  // Al eliminar el bloque "if (match)" que separaba a los scripts de URL, 
+  // OBLIGAMOS a que tanto las URLs como los scripts normales pasen por la VM y reciban todo el desorden.
 
-  if (match) {
-    const url = match[1];
-    const urlBytes = url.split('').map(c => c.charCodeAt(0));
-    const obfuscatedUrl = urlBytes.map(b => lightMath(b)).join(',');
-    return `loadstring(game:HttpGet(string.char(${obfuscatedUrl})))()`;
-  }
-
-  // 2. SI ES CÓDIGO NORMAL (Ofusca y asegura que SE EJECUTE)
   let preProcessed = detectAndApplyMappings(sourceCode);
   const seed = Date.now() + Math.random() * 99999999;
   const xorKeyBase = Math.floor(seed % 2147483647) + 1;
@@ -162,8 +163,10 @@ function obfuscate(sourceCode) {
   innerCode += `${PC}=${PC}+1;`;
   innerCode += `end;return ${STACK};end;`;
   
-  // RESTAURADO: Esta línea es la que hace que tu código funcione y no se quede como un simple texto inútil.
-  // Intenté ofuscarlo un poco más (getfenv) para que la palabra 'loadstring' no sea tan evidente a simple vista.
+  // 💉 Inyectamos las protecciones justo antes de ejecutar el payload
+  innerCode += generateProtections();
+
+  // Ejecución del código desofuscado
   innerCode += `local ex=getfenv()["load"+"string"] or load; local p=ex(${DECODER}()); if p then p() end;`;
 
   let vm = HEADER + '\n';
@@ -171,6 +174,7 @@ function obfuscate(sourceCode) {
   vm += buildVMWrapper(innerCode);
   vm += generateJunk(126);
 
+  // Minificación final
   vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
   return `return(function()${vm}end)();`;
 }
