@@ -1,10 +1,7 @@
 const DISCORD = "https://discord.gg/UttE8VYAY"
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
-const IL_POOL = [
-  "IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", 
-  "I1","l1","v1","v2","v3","II","ll","vv","I2","l2","vI","Iv"
-]
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv","I2","l2","vI","Iv"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"]
 
 function generateIlName() {
@@ -43,12 +40,12 @@ function generateJunk(lines = 100) {
 
 function applyCFF(blocks) {
   const stateVar = generateIlName()
-  let lua = `local ${stateVar}=1 while true do `
+  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
   for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${stateVar}==1 then ${blocks[i]} ${stateVar}=2 `
-    else lua += `elseif ${stateVar}==${i + 1} then ${blocks[i]} ${stateVar}=${i + 2} `
+    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
+    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
   }
-  lua += `elseif ${stateVar}==${blocks.length + 1} then break end end `
+  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
   return lua
 }
 
@@ -56,76 +53,52 @@ function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount)
   const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = generateIlName()
-  
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(15)} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(10)} ${innerCode} end `
     } else {
       out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return nil end `
     }
   }
-  
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
   out += `} `
-  
   let execBlocks = []
   for (let i = 0; i < handlers.length; i++) {
     execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
   }
-  
   out += applyCFF(execBlocks)
   return out
 }
 
 function buildDoubleVM(payload) {
-  const innerVM = buildSingleVM(payload, 4)
-  const outerVM = buildSingleVM(innerVM, 6)
-  return outerVM
-}
-
-function minify(code) {
-  return code.replace(/\s+/g, " ").trim()
+  return buildSingleVM(buildSingleVM(payload, 5), 7)
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
-
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end if tostring(string.char):find("hook") or tostring(loadstring):find("hook") then while true do end end `
-
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end if tostring(string.char):find(string.char(104,111,111,107)) or tostring(loadstring):find(string.char(104,111,111,107)) then while true do end end `
+  
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
 
   if (match) {
     const url = match[1]
-    const urlBytes = url.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
-    
-    const innerPayload = `loadstring(game:HttpGet(string.char(${urlBytes})))()`
-    const dualVmBody = buildDoubleVM(innerPayload)
-    
-    const finalCode = `${HEADER} ${generateJunk(120)} ${antiDebug} ${dualVmBody}`
-    return minify(finalCode)
+    const urlBytewise = url.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
+    const payload = `loadstring(game:HttpGet(string.char(${urlBytewise})))()`
+    const final = `${HEADER} ${generateJunk(50)} ${antiDebug} ${buildDoubleVM(payload)}`
+    return final.replace(/\s+/g, " ").trim()
   }
 
   const seed = Date.now()
   const xorKeyBase = Math.floor(seed % 250) + 1
   const bytes = sourceCode.split('').map((char) => (char.charCodeAt(0) ^ xorKeyBase) & 0xFF)
-
   const VM_DATA = generateIlName(), XOR_KEY = generateIlName(), STR = generateIlName()
-
-  let innerCode = `local ${VM_DATA}={${bytes.map(b => heavyMath(b)).join(',')}} `
-  innerCode += `local ${XOR_KEY}=${heavyMath(xorKeyBase)} local ${STR}="" `
-  
-  let decodeLoop = `for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end `
-  let execBlock = `local _p=assert(loadstring(${STR})) _p() `
-  
-  innerCode += decodeLoop + execBlock
-  let dualVmBody = buildDoubleVM(innerCode)
-  
-  const finalVM = `${HEADER} ${generateJunk(150)} ${antiDebug} ${dualVmBody} ${generateJunk(50)}`
-  
-  return `return function(...) do do ${minify(finalVM)} end end end`
+  let innerCode = `local ${VM_DATA}={${bytes.map(b => heavyMath(b)).join(',')}} local ${XOR_KEY}=${heavyMath(xorKeyBase)} local ${STR}="" for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end assert(loadstring(${STR}))() `
+  const final = `${HEADER} ${generateJunk(80)} ${antiDebug} ${buildDoubleVM(innerCode)}`
+  return final.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
+    
