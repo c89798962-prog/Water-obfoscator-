@@ -1,5 +1,6 @@
 const DISCORD = "https://discord.gg/5E45u5eES"
 const HEADER = `--[[ MIMOSA VM v4.5 - ${DISCORD} - Protegido ]]`
+// Pool de variables estilo I1, l1, v1... para confundir el ojo humano
 const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il", "IIIIII1", "vvvv1", "vvvv2", "vvvvvvvv3"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"]
 
@@ -18,52 +19,46 @@ function pickHandlers(count) {
   return result
 }
 
+// Math Code: Convierte un número en una operación matemática compleja
 function lightMath(n) {
-  let a = Math.floor(Math.random() * 100) + 50
-  let b = Math.floor(Math.random() * 20) + 5
-  return `(${n}+${a}-${a}+${b}-${b})`
-}
-
-function stringToMath(str) {
-  return `{${str.split('').map(c => lightMath(c.charCodeAt(0))).join(',')}}`
-}
-
-function mba() {
-  let a = Math.floor(Math.random() * 70) + 15
-  return `(${a}-${a}+1)`
+  let a = Math.floor(Math.random() * 1000) + 123
+  let b = Math.floor(Math.random() * 500) + 50
+  return `((${n}+${a})-${a}+(${b}*1)-${b})`
 }
 
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
-    if (r < 0.25)      j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 999))} `
-    else if (r < 0.5)  j += `local ${generateIlName()}=${mba()} `
-    else               j += `local ${generateIlName()}=string.char(${Math.floor(Math.random()*255)}) `
+    if (r < 0.3) j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 999))} `
+    else if (r < 0.6) j += `local ${generateIlName()}=string.char(${Math.floor(Math.random()*255)}) `
+    else j += `if not(1==1) then local x=1 end `
   }
   return j
 }
 
+// VM Handler System: Crea un despachador de funciones falso para esconder la ejecución real
 function buildVMWrapper(innerCode) {
-  const handlerCount = 4 + Math.floor(Math.random() * 3)
+  const handlerCount = 6
   const handlers = pickHandlers(handlerCount)
   const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = generateIlName()
+  
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(10)} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(20)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) return lM end `
+      out += `local ${handlers[i]}=function(lM) return nil end `
     }
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) { out += `[${i + 1}]=${handlers[i]},` }
   out += `} `
+  // Ejecuta handlers falsos antes del real
   for (let i = 0; i < handlers.length; i++) {
-    if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM) `
+    out += `${DISPATCH}[${i + 1}](lM) `
   }
-  out += `${DISPATCH}[${realIdx + 1}](lM) `
   return out
 }
 
@@ -74,42 +69,44 @@ function minify(code) {
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
 
+  // Anti-Debug y Anti-Hook de string.char
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,100000 do end if os.clock()-_t>6.5 then while true do end end if tostring(string.char):find("hook") or tostring(loadstring):find("hook") then while true do end end `
+
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
 
   // ==========================================
-  // CASO 1: SOLO LOADSTRING (Directo, sin return function)
+  // MODO 1: WATERMARK + LOADSTRING (Para Scripts rápidos)
   // ==========================================
   if (match) {
     const url = match[1]
     const urlBytes = url.split('').map(c => lightMath(c.charCodeAt(0))).join(',')
     
-    let prot = `local _clk=os.clock if _clk then local _t=_clk() for _=1,1500 do end if _clk()-_t>3.5 then while true do end end end `
-    prot += `if type(string.char)~="function" or tostring(string.char):lower():find("hook") then while true do end end `
-    
-    // Formato: HEADER + Junk + Protecciones + Loadstring directo
-    const finalCode = `${HEADER} ${generateJunk(150)} ${prot} loadstring(game:HttpGet(string.char(${urlBytes})))()`
+    const finalCode = `${HEADER} ${generateJunk(120)} ${antiDebug} loadstring(game:HttpGet(string.char(${urlBytes})))()`
     return minify(finalCode)
   }
 
   // ==========================================
-  // CASO 2: SCRIPT COMPLETO / HUB (VM con return function)
+  // MODO 2: VM FUERTE (Para Hubs y Scripts Gigantes)
   // ==========================================
   const seed = Date.now()
-  const xorKeyBase = Math.floor(seed % 200) + 1
+  const xorKeyBase = Math.floor(seed % 250) + 1
   const bytes = sourceCode.split('').map((char) => (char.charCodeAt(0) ^ xorKeyBase) & 0xFF)
 
   const VM_DATA = generateIlName(), XOR_KEY = generateIlName(), STR = generateIlName(), DEC = generateIlName()
 
+  // Inner Code con XOR y Math Code en los bytes
   let innerCode = `local ${VM_DATA}={${bytes.map(b => lightMath(b)).join(',')}} `
-  innerCode += `local ${XOR_KEY}=${xorKeyBase} local ${STR}="" `
-  innerCode += `local ${DEC}=function() for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end return ${STR} end `
-  innerCode += `local _clk=os.clock if _clk then local _t=_clk() for _=1,1500 do end if _clk()-_t>3.5 then while true do end end end `
-  innerCode += `local p=(getfenv()["load"+"string"] or load)(${DEC}()) if p then p() end `
+  innerCode += `local ${XOR_KEY}=${lightMath(xorKeyBase)} local ${STR}="" `
+  innerCode += `for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end `
+  innerCode += `local _p=assert(loadstring(${STR})) _p() `
 
-  let vm = HEADER + "\n" + generateJunk(100) + buildVMWrapper(innerCode) + generateJunk(100)
+  let vmBody = buildVMWrapper(innerCode)
+  const finalVM = `${HEADER} ${generateJunk(150)} ${antiDebug} ${vmBody} ${generateJunk(50)}`
   
-  return `return function() do do ${minify(vm)} end end end`
+  // Return function para scripts tipo "return function()" o Gigabytes de código
+  return `return function(...) do do ${minify(finalVM)} end end end`
 }
 
 module.exports = { obfuscate }
+  
