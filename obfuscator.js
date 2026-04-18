@@ -1,6 +1,6 @@
 const DISCORD = "https://discord.gg/5E45u5eES"
 const HEADER = `--[[ MIMOSA VM v4.5 - ${DISCORD} - Protegido ]]`
-const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il"]
+const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il", "IIIIII1", "vvvv1", "vvvv2", "vvvvvvvv3"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"]
 
 function generateIlName() {
@@ -18,10 +18,10 @@ function pickHandlers(count) {
   return result
 }
 
-// Matemáticas simples sin el operador de multiplicación (*)
 function lightMath(n) {
-  let a = Math.floor(Math.random() * 50) + 10
-  return `(${n}+${a}-${a})`
+  let a = Math.floor(Math.random() * 100) + 50
+  let b = Math.floor(Math.random() * 20) + 5
+  return `(${n}+${a}-${a}+${b}-${b})`
 }
 
 function stringToMath(str) {
@@ -44,67 +44,25 @@ function generateJunk(lines = 100) {
   return j
 }
 
-const MAPEO = {
-  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
-  "TextButton":"Mixed Boolean Arithmetic","TextBox":"Aggressive Renaming","ImageLabel":"Size-Based Execution Switch",
-  "Humanoid":"Dynamic Junk","Player":"Fake Flow","Character":"Math Encoding","Part":"Literal Obfuscation",
-  "Camera":"Table Indirection","TweenService":"Fake Flow","RunService":"Virtual Machine",
-  "UserInputService":"Mixed Boolean Arithmetic","RemoteEvent":"Fake Flow","Workspace":"Reverse If",
-  "Lighting":"Size-Based Execution Switch","Players":"Fake Flow","ReplicatedStorage":"Table Indirection","StarterGui":"String to Math"
-}
-
-function detectAndApplyMappings(code) {
-  let modified = code, headers = ""
-  const sorted = Object.entries(MAPEO).sort((a, b) => b[0].length - a[0].length)
-  for (const [word, tech] of sorted) {
-    const regex = new RegExp(`(game\\s*\\.\\s*|\\b\\.\\s*)?\\b${word}\\b`, "g")
-    if (regex.test(modified)) {
-      let replacement = `"${word}"`
-      if (tech.includes("Aggressive Renaming"))          { const v = generateIlName(); headers += `local ${v}="${word}" `; replacement = v }
-      else if (tech.includes("String to Math"))           replacement = `string.char(${stringToMath(word)})`
-      else if (tech.includes("Table Indirection"))        { const t = generateIlName(); headers += `local ${t}={"${word}"} `; replacement = `${t}[1]` }
-      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`
-      else if (tech.includes("Fake Flow"))                replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`
-      regex.lastIndex = 0
-      modified = modified.replace(regex, (match, prefix) => {
-        if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`
-        return replacement
-      })
-    }
-  }
-  return headers + modified
-}
-
 function buildVMWrapper(innerCode) {
   const handlerCount = 4 + Math.floor(Math.random() * 3)
   const handlers = pickHandlers(handlerCount)
   const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = generateIlName()
-
-  let out = ''
-  out += `local lM={} local lM=lM ` 
-
+  let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) `
-      out += generateJunk(5)
-      out += innerCode
-      out += ` end `
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(10)} ${innerCode} end `
     } else {
       out += `local ${handlers[i]}=function(lM) return lM end `
     }
   }
-
   out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) {
-    out += `[${i + 1}]=${handlers[i]},`
-  }
+  for (let i = 0; i < handlers.length; i++) { out += `[${i + 1}]=${handlers[i]},` }
   out += `} `
-
   for (let i = 0; i < handlers.length; i++) {
     if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM) `
   }
-
   out += `${DISPATCH}[${realIdx + 1}](lM) `
   return out
 }
@@ -116,83 +74,42 @@ function minify(code) {
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
 
-  // ==========================================
-  // ESTADO 1: SISTEMA DE DETECCIÓN LOADSTRING (Ahora incluye VM y Variables I1, v1)
-  // ==========================================
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
 
+  // ==========================================
+  // CASO 1: SOLO LOADSTRING (Directo, sin return function)
+  // ==========================================
   if (match) {
     const url = match[1]
-    // Dividimos la URL con Math Code seguro
     const urlBytes = url.split('').map(c => lightMath(c.charCodeAt(0))).join(',')
     
-    let innerLoadstring = ''
+    let prot = `local _clk=os.clock if _clk then local _t=_clk() for _=1,1500 do end if _clk()-_t>3.5 then while true do end end end `
+    prot += `if type(string.char)~="function" or tostring(string.char):lower():find("hook") then while true do end end `
     
-    // Anti-Debug
-    innerLoadstring += `local _clk=os.clock if _clk then local _t=_clk() for _=1,1500 do end if _clk()-_t>3.5 then while true do end end end `
-    // Anti-Tamper
-    innerLoadstring += `if type(string.char)~="function" or tostring(string.char):lower():find("hook") then while true do end end `
-    
-    // Ejecutar el loadstring dentro de la VM
-    innerLoadstring += `local ex=getfenv()["load"+"string"] or load local p=ex(game:HttpGet(string.char(${urlBytes}))) if p then p() end `
-
-    let vmLoadstring = HEADER + '\n'
-    vmLoadstring += generateJunk(60) // Añade las variables I1, v1, v2, y math code
-    vmLoadstring += buildVMWrapper(innerLoadstring) // Envuelve todo en la máquina virtual
-    vmLoadstring += generateJunk(60)
-
-    vmLoadstring = minify(vmLoadstring)
-    
-    return `return function() do do ${vmLoadstring} end end end`
+    // Formato: HEADER + Junk + Protecciones + Loadstring directo
+    const finalCode = `${HEADER} ${generateJunk(150)} ${prot} loadstring(game:HttpGet(string.char(${urlBytes})))()`
+    return minify(finalCode)
   }
 
   // ==========================================
-  // ESTADO 2: OFUSCACIÓN DE SCRIPT NORMAL (VM, Junk, Math y ambos Anti-Tamper/Debug)
+  // CASO 2: SCRIPT COMPLETO / HUB (VM con return function)
   // ==========================================
-  let preProcessed = detectAndApplyMappings(sourceCode)
   const seed = Date.now()
   const xorKeyBase = Math.floor(seed % 200) + 1
-  
-  // Encriptamos los bytes del código
-  const bytes = preProcessed.split('').map((char) => {
-    return (char.charCodeAt(0) ^ xorKeyBase) & 0xFF
-  })
+  const bytes = sourceCode.split('').map((char) => (char.charCodeAt(0) ^ xorKeyBase) & 0xFF)
 
-  const VM_DATA = generateIlName(), XOR_KEY = generateIlName()
-  const STR = generateIlName(), DEC = generateIlName()
+  const VM_DATA = generateIlName(), XOR_KEY = generateIlName(), STR = generateIlName(), DEC = generateIlName()
 
-  let innerCode = ''
-  
-  // Array de bytes usando matemáticas ligeras
-  const vmBytesMath = bytes.map(b => lightMath(b)).join(',')
-  
-  innerCode += `local ${VM_DATA}={${vmBytesMath}} `
-  innerCode += `local ${XOR_KEY}=${xorKeyBase} `
-  innerCode += `local ${STR}="" `
-  
-  // Decodificador seguro sin `#` (longitud)
-  innerCode += `local ${DEC}=function() `
-  innerCode += `for _,v in pairs(${VM_DATA}) do `
-  innerCode += `${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) `
-  innerCode += `end return ${STR} end `
-  
-  // INYECTAMOS ANTI-DEBUG Y ANTI-TAMPER
+  let innerCode = `local ${VM_DATA}={${bytes.map(b => lightMath(b)).join(',')}} `
+  innerCode += `local ${XOR_KEY}=${xorKeyBase} local ${STR}="" `
+  innerCode += `local ${DEC}=function() for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end return ${STR} end `
   innerCode += `local _clk=os.clock if _clk then local _t=_clk() for _=1,1500 do end if _clk()-_t>3.5 then while true do end end end `
-  innerCode += `if type(string.char)~="function" or tostring(string.char):lower():find("hook") then while true do end end `
+  innerCode += `local p=(getfenv()["load"+"string"] or load)(${DEC}()) if p then p() end `
 
-  // Ejecutador
-  innerCode += `local ex=getfenv()["load"+"string"] or load local p=ex(${DEC}()) if p then p() end `
-
-  let vm = HEADER + '\n'
-  vm += generateJunk(60)
-  vm += buildVMWrapper(innerCode)
-  vm += generateJunk(60)
-
-  vm = minify(vm)
+  let vm = HEADER + "\n" + generateJunk(100) + buildVMWrapper(innerCode) + generateJunk(100)
   
-  return `return function() do do ${vm} end end end`
+  return `return function() do do ${minify(vm)} end end end`
 }
 
 module.exports = { obfuscate }
-      
