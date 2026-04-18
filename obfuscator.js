@@ -65,7 +65,7 @@ function detectAndApplyMappings(code) {
       else if (tech.includes("Table Indirection"))        { const t = generateIlName(); headers += `local ${t}={"${word}"};`; replacement = `${t}[1]`; }
       else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
       else if (tech.includes("Fake Flow"))                replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`;
-      else if (tech.includes("Virtual Machine"))          replacement = `(function() return "${word}" end)()`; 
+      else if (tech.includes("Virtual Machine"))          replacement = `loadstring("return '${word}'")()`; 
       regex.lastIndex = 0;
       modified = modified.replace(regex, (match, prefix) => {
         if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`;
@@ -83,63 +83,41 @@ function buildVMWrapper(innerCode) {
   const DISPATCH = generateIlName();
 
   let out = '';
+
   out += `local lM={`;
   for (let i = 1; i <= 8; i++) {
     out += `[${i}]=${lightMath(Math.floor(Math.random() * 999))},`;
   }
   out += `};`;
+  out += `local lM=lM;`; 
 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${innerCode} end;`;
+      out += `local ${handlers[i]}=function(lM)`;
+      out += `local lM=lM;`;
+      out += generateJunk(8);
+      out += innerCode;
+      out += `end;`;
     } else {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return lM; end;`;
+      const junkCount = 3 + Math.floor(Math.random() * 6);
+      out += `local ${handlers[i]}=function(lM)`;
+      out += `local lM=lM;`;
+      out += generateJunk(junkCount);
+      out += `return lM;`;
+      out += `end;`;
     }
   }
 
-  out += `local ${DISPATCH}={[1]=${handlers.join(',[2]=')}};`; // Simplificado para evitar tablas largas
-  out += `local function run() `;
-  for (let i = 0; i < handlers.length; i++) {
-    if (i !== realIdx) out += `${handlers[i]}(lM);`;
-  }
-  out += `${handlers[realIdx]}(lM); end; run();`;
-
-  return out;
-}
-
-function obfuscate(sourceCode) {
-  if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
-
-  // En lugar de loadstring, convertimos el código en una función anónima ejecutable
-  let preProcessed = `(function() ${detectAndApplyMappings(sourceCode)} end)()`;
-  
-  // Junk final y empaquetado
-  let vm = HEADER + '\n';
-  vm += generateJunk(50);
-  vm += buildVMWrapper(preProcessed);
-  vm += generateJunk(50);
-
-  // Limpieza de espacios para que se vea "pro" pero siga funcionando
-  vm = vm.replace(/\s+/g, ' ');
-  return vm;
-}
-
-module.exports = { obfuscate };
-  }
-
-  // Dispatch table: opcode → handler
   out += `local ${DISPATCH}={`;
   for (let i = 0; i < handlers.length; i++) {
     out += `[${i + 1}]=${handlers[i]},`;
   }
   out += `};`;
 
-  // Llamar handlers falsos primero (ruido)
   for (let i = 0; i < handlers.length; i++) {
     if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM);`;
   }
 
-  // Llamar handler real al final
   out += `${DISPATCH}[${realIdx + 1}](lM);`;
 
   return out;
@@ -160,7 +138,6 @@ function obfuscate(sourceCode) {
   const VM_DATA = generateIlName(), XOR_KEY = generateIlName();
   const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName();
 
-  // Código interno del handler real: XOR decoder + loadstring
   let innerCode = '';
   innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))};`;
   innerCode += `local ${XOR_KEY}=${mba()};`;
@@ -168,10 +145,12 @@ function obfuscate(sourceCode) {
   innerCode += `local ${DECODER}=function()`;
   innerCode += generateJunk(20);
   innerCode += `while ${PC}<=#${VM_DATA} do `;
-  innerCode += `local lM=${VM_DATA}[${PC}];`; // lM como var del loop
+  innerCode += `local lM=${VM_DATA}[${PC}];`; 
+  // OJO AQUÍ: Este es un problema para Roblox
   innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
   innerCode += `${PC}=${PC}+1;`;
   innerCode += `end;return ${STACK};end;`;
+  // OJO AQUÍ TAMBIÉN: Otro problema para Roblox
   innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
 
   let vm = HEADER + '\n';
@@ -184,3 +163,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate };
+        
