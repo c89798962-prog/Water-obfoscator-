@@ -65,7 +65,7 @@ function detectAndApplyMappings(code) {
       else if (tech.includes("Table Indirection"))        { const t = generateIlName(); headers += `local ${t}={"${word}"};`; replacement = `${t}[1]`; }
       else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
       else if (tech.includes("Fake Flow"))                replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`;
-      else if (tech.includes("Virtual Machine"))          replacement = `loadstring("return '${word}'")()`; 
+      else if (tech.includes("Virtual Machine"))          replacement = `(function() return "${word}" end)()`; 
       regex.lastIndex = 0;
       modified = modified.replace(regex, (match, prefix) => {
         if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`;
@@ -83,33 +83,48 @@ function buildVMWrapper(innerCode) {
   const DISPATCH = generateIlName();
 
   let out = '';
-
-  // lM = VM registers (lM repite por todo el código para confundir el rastreo)
   out += `local lM={`;
   for (let i = 1; i <= 8; i++) {
     out += `[${i}]=${lightMath(Math.floor(Math.random() * 999))},`;
   }
   out += `};`;
-  out += `local lM=lM;`; // re-shadow para confundir
 
-  // Handlers: cada uno recibe lM como param y lo re-shadowea adentro
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      // Handler real: decoder XOR + payload oculto adentro
-      out += `local ${handlers[i]}=function(lM)`;
-      out += `local lM=lM;`;
-      out += generateJunk(8);
-      out += innerCode;
-      out += `end;`;
+      out += `local ${handlers[i]}=function(lM) ${innerCode} end;`;
     } else {
-      // Handler falso: junk + return lM
-      const junkCount = 3 + Math.floor(Math.random() * 6);
-      out += `local ${handlers[i]}=function(lM)`;
-      out += `local lM=lM;`;
-      out += generateJunk(junkCount);
-      out += `return lM;`;
-      out += `end;`;
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return lM; end;`;
     }
+  }
+
+  out += `local ${DISPATCH}={[1]=${handlers.join(',[2]=')}};`; // Simplificado para evitar tablas largas
+  out += `local function run() `;
+  for (let i = 0; i < handlers.length; i++) {
+    if (i !== realIdx) out += `${handlers[i]}(lM);`;
+  }
+  out += `${handlers[realIdx]}(lM); end; run();`;
+
+  return out;
+}
+
+function obfuscate(sourceCode) {
+  if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
+
+  // En lugar de loadstring, convertimos el código en una función anónima ejecutable
+  let preProcessed = `(function() ${detectAndApplyMappings(sourceCode)} end)()`;
+  
+  // Junk final y empaquetado
+  let vm = HEADER + '\n';
+  vm += generateJunk(50);
+  vm += buildVMWrapper(preProcessed);
+  vm += generateJunk(50);
+
+  // Limpieza de espacios para que se vea "pro" pero siga funcionando
+  vm = vm.replace(/\s+/g, ' ');
+  return vm;
+}
+
+module.exports = { obfuscate };
   }
 
   // Dispatch table: opcode → handler
