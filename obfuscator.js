@@ -1,120 +1,171 @@
-function obfuscate(luaCode) {
-    const watermark = "--[[ this code it's protected by water obfoscatir:https://discord.gg/JUrq2QR4s ]]\n";
+const DISCORD = "https://discord.gg/5E45u5eES";
+const HEADER = `--[[ MIMOSA VM v4.5 - ${DISCORD} - 15KB ]]`;
+const IL_POOL = ["I1","l1","v1","v2","v3","II","ll","vv","v4","v5","I2","l2","vI","Iv","v6","I3","lI","Il"];
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"];
 
-    const mathKey = Math.floor(Math.random() * 150) + 25;
+function generateIlName() {
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 9999);
+}
 
-    let bytecode = [];
-    for (let i = 0; i < luaCode.length; i++) {
-        bytecode.push(luaCode.charCodeAt(i) + mathKey);
+function pickHandlers(count) {
+  const used = new Set();
+  const result = [];
+  while (result.length < count) {
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)];
+    const name = base + Math.floor(Math.random() * 99);
+    if (!used.has(name)) { used.add(name); result.push(name); }
+  }
+  return result;
+}
+
+function lightMath(n) {
+  let a = Math.floor(Math.random() * 90) + 20, b = Math.floor(Math.random() * 60) + 10;
+  return `(${n}+${a}*${b}-${a})`;
+}
+
+function stringToMath(str) {
+  return `{${str.split('').map(c => lightMath(c.charCodeAt(0))).join(',')}}`;
+}
+
+function mba() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+}
+
+function generateJunk(lines = 144) {
+  let j = '';
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random();
+    if (r < 0.25)      j += `local ${generateIlName()}=${lightMath(Math.floor(Math.random() * 9999))}; `;
+    else if (r < 0.5)  j += `local ${generateIlName()}=${mba()}; `;
+    else if (r < 0.75) j += `local ${generateIlName()}=${lightMath(mba())}; `;
+    else               j += `local ${generateIlName()}=(${mba()}+${lightMath(Math.floor(Math.random() * 999))}); `;
+  }
+  return j;
+}
+
+const MAPEO = {
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","TextBox":"Aggressive Renaming","ImageLabel":"Size-Based Execution Switch",
+  "Humanoid":"Dynamic Junk","Player":"Fake Flow","Character":"Math Encoding","Part":"Literal Obfuscation",
+  "Camera":"Table Indirection","TweenService":"Fake Flow","RunService":"Virtual Machine",
+  "UserInputService":"Mixed Boolean Arithmetic","RemoteEvent":"Fake Flow","Workspace":"Reverse If",
+  "Lighting":"Size-Based Execution Switch","Players":"Fake Flow","ReplicatedStorage":"Table Indirection","StarterGui":"String to Math"
+};
+
+function detectAndApplyMappings(code) {
+  let modified = code, headers = "";
+  const sorted = Object.entries(MAPEO).sort((a, b) => b[0].length - a[0].length);
+  for (const [word, tech] of sorted) {
+    const regex = new RegExp(`(game\\s*\\.\\s*|\\b\\.\\s*)?\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming"))          { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math"))           replacement = `string.char(${stringToMath(word)})`;
+      else if (tech.includes("Table Indirection"))        { const t = generateIlName(); headers += `local ${t}={"${word}"};`; replacement = `${t}[1]`; }
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
+      else if (tech.includes("Fake Flow"))                replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`;
+      else if (tech.includes("Virtual Machine"))          replacement = `loadstring("return '${word}'")()`; 
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match, prefix) => {
+        if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`;
+        return replacement;
+      });
     }
-
-    const bytecodeLength = bytecode.length;
-
-    let vmTemplate = `
-    local lM = ${mathKey}
-    local IIIIIIIIII1 = {${bytecode.join(',')}}
-    local vvv1 = string.char()
-    local v1 = 1
-    local v2 = ${bytecodeLength}
-    local v3 = 0
-    local KQ = function(lM_arg, lM_key) 
-        return string.char(lM_arg - lM_key) 
-    end
-    local HF = function(lM_val) 
-        local lM_math = math.random(1,5)
-        local lM_dummy = lM_math - lM_math
-        v3 = lM_val + lM_dummy
-        return lM
-    end
-    local W8 = function(lM_str, lM_char) 
-        return lM_str .. lM_char 
-    end
-    local SX = function()
-        while v1 <= v2 do
-            local lM_inst = IIIIIIIIII1[v1]
-            HF(lM_inst)
-            local lM_temp = KQ(v3, lM)
-            vvv1 = W8(vvv1, lM_temp)
-            v1 = v1 + 1
-            local lM_fake = lM
-        end
-    end
-    SX()
-    local lM_exec = loadstring or load
-    lM_exec(vvv1)()
-    `;
-
-    let compressedLua = vmTemplate.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-    return watermark + compressedLua;
+  }
+  return headers + modified;
 }
 
-module.exports = { obfuscate };    const protectRegex = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g;
-    
-    let safeCode = code.replace(protectRegex, (m) => {
-        const id = `__T${placeholders.length}__`;
-        placeholders.push(m);
-        return id;
-    });
+function buildVMWrapper(innerCode) {
+  const handlerCount = 5 + Math.floor(Math.random() * 4);
+  const handlers = pickHandlers(handlerCount);
+  const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName();
 
-    const keywords = ["Workspace", "Players", "Character", "Humanoid", "FindFirstChild", "WaitForChild"];
-    
-    keywords.forEach(word => {
-        const v = rn();
-        headList.push(`local ${v}=string.char(${word.split('').map(c => c.charCodeAt(0)).join(',')});`);
-        const regex = new RegExp(`\\.${word}\\b`, "g");
-        safeCode = safeCode.replace(regex, `[${v}]`);
-    });
+  let out = '';
 
-    headList.sort(() => Math.random() - 0.5);
-    
-    placeholders.forEach((s, i) => {
-        safeCode = safeCode.replace(`__T${i}__`, s);
-    });
-    
-    return { headers: headList.join(""), code: safeCode };
-}
+  // lM = VM registers (lM repite por todo el código para confundir el rastreo)
+  out += `local lM={`;
+  for (let i = 1; i <= 8; i++) {
+    out += `[${i}]=${lightMath(Math.floor(Math.random() * 999))},`;
+  }
+  out += `};`;
+  out += `local lM=lM;`; // re-shadow para confundir
 
-/**
- * 🌪️ FUNCIÓN PRINCIPAL DE OFUSCACIÓN
- */
-function obfuscate(code) {
-    let { headers, code: pre } = advancedScanner(code);
-    let table = stringToTable(pre);
-    
-    let finalPayload = `
-        ${junk(100)} 
-        ${headers} 
-        ${junk(100)} 
-        ${VM(table)} 
-        ${junk(100)}
-    `;
-
-    return `return (function() ${minify(finalPayload)} end)()`;
-}
-
-// ENDPOINTS
-app.post("/obfuscate", (req, res) => {
-    const code = req.body.code || "";
-    if (!code.trim()) return res.status(400).json({ error: "El código está vacío" });
-    try {
-        const result = obfuscate(code);
-        res.json({ obfuscated: result });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
+  // Handlers: cada uno recibe lM como param y lo re-shadowea adentro
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) {
+      // Handler real: decoder XOR + payload oculto adentro
+      out += `local ${handlers[i]}=function(lM)`;
+      out += `local lM=lM;`;
+      out += generateJunk(8);
+      out += innerCode;
+      out += `end;`;
+    } else {
+      // Handler falso: junk + return lM
+      const junkCount = 3 + Math.floor(Math.random() * 6);
+      out += `local ${handlers[i]}=function(lM)`;
+      out += `local lM=lM;`;
+      out += generateJunk(junkCount);
+      out += `return lM;`;
+      out += `end;`;
     }
-});
+  }
 
-// Ruta de prueba para verificar que el servidor vive
-app.get("/", (req, res) => {
-    res.send("☢️ Servidor de Entropía Total operativo.");
-});
+  // Dispatch table: opcode → handler
+  out += `local ${DISPATCH}={`;
+  for (let i = 0; i < handlers.length; i++) {
+    out += `[${i + 1}]=${handlers[i]},`;
+  }
+  out += `};`;
 
-// CONFIGURACIÓN DE PUERTO PARA RAILWAY
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`☢️ SERVIDOR ACTIVO EN PUERTO: ${PORT}`);
-});
+  // Llamar handlers falsos primero (ruido)
+  for (let i = 0; i < handlers.length; i++) {
+    if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM);`;
+  }
 
-// EXPORTACIÓN REQUERIDA
+  // Llamar handler real al final
+  out += `${DISPATCH}[${realIdx + 1}](lM);`;
+
+  return out;
+}
+
+function obfuscate(sourceCode) {
+  if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
+
+  let preProcessed = detectAndApplyMappings(sourceCode);
+  const seed = Date.now() + Math.random() * 99999999;
+  const xorKeyBase = Math.floor(seed % 2147483647) + 1;
+  const bytes = preProcessed.split('').map((char, i) => {
+    let val = char.charCodeAt(0) ^ (xorKeyBase + i * 5);
+    val = val ^ (xorKeyBase >>> 4);
+    return val & 0xFF;
+  });
+
+  const VM_DATA = generateIlName(), XOR_KEY = generateIlName();
+  const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName();
+
+  // Código interno del handler real: XOR decoder + loadstring
+  let innerCode = '';
+  innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))};`;
+  innerCode += `local ${XOR_KEY}=${mba()};`;
+  innerCode += `local ${PC}=1;local ${STACK}="";`;
+  innerCode += `local ${DECODER}=function()`;
+  innerCode += generateJunk(20);
+  innerCode += `while ${PC}<=#${VM_DATA} do `;
+  innerCode += `local lM=${VM_DATA}[${PC}];`; // lM como var del loop
+  innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
+  innerCode += `${PC}=${PC}+1;`;
+  innerCode += `end;return ${STACK};end;`;
+  innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
+
+  let vm = HEADER + '\n';
+  vm += generateJunk(144);
+  vm += buildVMWrapper(innerCode);
+  vm += generateJunk(126);
+
+  vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
+  return `return(function()${vm}end)();`;
+}
+
 module.exports = { obfuscate };
-            
