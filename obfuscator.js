@@ -1,14 +1,14 @@
 const DISCORD = "https://discord.gg/UttE8VYAY"
-const HEADER = `--[[ THIS CODE IT'S PROTECTED BY WATER OBFOSCATOR: ${DISCORD} ]]`
+const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
 const IL_POOL = [
   "IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", 
-  "I1","l1","v1","v2","v3","II","ll","vv","I2","l2","vI","Iv", "O0O0O0", "lIlIIl"
+  "I1","l1","v1","v2","v3","II","ll","vv","I2","l2","vI","Iv"
 ]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"]
 
 function generateIlName() {
-  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 999999)
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
 }
 
 function pickHandlers(count) {
@@ -16,59 +16,53 @@ function pickHandlers(count) {
   const result = []
   while (result.length < count) {
     const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
-    const name = base + Math.floor(Math.random() * 999)
+    const name = base + Math.floor(Math.random() * 99)
     if (!used.has(name)) { used.add(name); result.push(name) }
   }
   return result
 }
 
-// Math Code Reforzado (+30% de complejidad con Bitwise y XOR simulado)
 function heavyMath(n) {
-  let a = Math.floor(Math.random() * 5000) + 1000
-  let b = Math.floor(Math.random() * 2000) + 500
-  let c = Math.floor(Math.random() * 100) + 7
-  // Ecuación: ((n + a) * c / c - a + (b ^ 2) / b - b)
-  // Añadimos más capas de ofuscación numérica
-  return `(((((${n}+${a})*${c})/${c})-${a})+(((${b}*${b})/${b})-${b}))`
+  let a = Math.floor(Math.random() * 3000) + 500
+  let b = Math.floor(Math.random() * 50) + 2
+  let c = Math.floor(Math.random() * 800) + 10
+  let d = Math.floor(Math.random() * 20) + 2
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
-function generateJunk(lines = 150) {
+function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
-    if (r < 0.4) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 10000))} `
-    else if (r < 0.7) j += `local ${generateIlName()}=string.reverse(string.char(${Math.floor(Math.random()*255)})) `
-    else j += `if (function() return false end)() then return end `
+    if (r < 0.3) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
+    else if (r < 0.6) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
+    else j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
   }
   return j
 }
 
-// Implementación de Control Flow Flattening (Flujo de control disperso)
-function applyControlFlow(codeBlock) {
+function applyCFF(blocks) {
   const stateVar = generateIlName()
-  return `local ${stateVar} = ${heavyMath(1)} 
-  while ${stateVar} ~= nil do 
-    if ${stateVar} == ${heavyMath(1)} then 
-      ${codeBlock} 
-      ${stateVar} = nil 
-    end 
-  end`
+  let lua = `local ${stateVar}=1 while true do `
+  for (let i = 0; i < blocks.length; i++) {
+    if (i === 0) lua += `if ${stateVar}==1 then ${blocks[i]} ${stateVar}=2 `
+    else lua += `elseif ${stateVar}==${i + 1} then ${blocks[i]} ${stateVar}=${i + 2} `
+  }
+  lua += `elseif ${stateVar}==${blocks.length + 1} then break end end `
+  return lua
 }
 
-function buildVMWrapper(innerCode, isNested = false) {
-  const handlerCount = isNested ? 4 : 8 // La VM externa es más grande
+function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount)
   const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = generateIlName()
-  const JUNK_LEVEL = isNested ? 10 : 40
   
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      // Aplicamos Control Flow dentro de los handlers reales
-      out += `local ${handlers[i]}=function(lM) ${applyControlFlow(innerCode)} end `
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(15)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(JUNK_LEVEL)} return nil end `
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return nil end `
     }
   }
   
@@ -76,11 +70,19 @@ function buildVMWrapper(innerCode, isNested = false) {
   for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
   out += `} `
   
-  // Ejecución desordenada simulada
+  let execBlocks = []
   for (let i = 0; i < handlers.length; i++) {
-    out += `${DISPATCH}[${heavyMath(i + 1)}](lM) `
+    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
   }
+  
+  out += applyCFF(execBlocks)
   return out
+}
+
+function buildDoubleVM(payload) {
+  const innerVM = buildSingleVM(payload, 4)
+  const outerVM = buildSingleVM(innerVM, 6)
+  return outerVM
 }
 
 function minify(code) {
@@ -90,31 +92,40 @@ function minify(code) {
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
 
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,200000 do end if os.clock()-_t>5.0 then while true do end end if tostring(string.char):find("hook") or tostring(loadstring):find("hook") or tostring(os.execute):find("hook") then while true do end end `
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end if tostring(string.char):find("hook") or tostring(loadstring):find("hook") then while true do end end `
 
-  // Lógica de Bytecode y XOR
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
+  const match = sourceCode.match(isLoadstringRegex)
+
+  if (match) {
+    const url = match[1]
+    const urlBytes = url.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
+    
+    const innerPayload = `loadstring(game:HttpGet(string.char(${urlBytes})))()`
+    const dualVmBody = buildDoubleVM(innerPayload)
+    
+    const finalCode = `${HEADER} ${generateJunk(120)} ${antiDebug} ${dualVmBody}`
+    return minify(finalCode)
+  }
+
   const seed = Date.now()
   const xorKeyBase = Math.floor(seed % 250) + 1
   const bytes = sourceCode.split('').map((char) => (char.charCodeAt(0) ^ xorKeyBase) & 0xFF)
 
   const VM_DATA = generateIlName(), XOR_KEY = generateIlName(), STR = generateIlName()
 
-  // INNER VM (Capa 2)
   let innerCode = `local ${VM_DATA}={${bytes.map(b => heavyMath(b)).join(',')}} `
   innerCode += `local ${XOR_KEY}=${heavyMath(xorKeyBase)} local ${STR}="" `
-  innerCode += `for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end `
-  innerCode += `local _p=assert(loadstring(${STR})) _p() `
-
-  // Envolvemos el innerCode en una SEGUNDA VM (Capa 1)
-  const nestedVM = buildVMWrapper(innerCode, true)
   
-  // Envolvemos todo en la VM principal
-  const mainVMBody = buildVMWrapper(nestedVM, false)
-
-  const finalVM = `${HEADER} ${generateJunk(200)} ${antiDebug} ${mainVMBody} ${generateJunk(80)}`
+  let decodeLoop = `for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end `
+  let execBlock = `local _p=assert(loadstring(${STR})) _p() `
   
-  return `return (function(...) ${minify(finalVM)} end)(...)`
+  innerCode += decodeLoop + execBlock
+  let dualVmBody = buildDoubleVM(innerCode)
+  
+  const finalVM = `${HEADER} ${generateJunk(150)} ${antiDebug} ${dualVmBody} ${generateJunk(50)}`
+  
+  return `return function(...) do do ${minify(finalVM)} end end end`
 }
 
 module.exports = { obfuscate }
-    
