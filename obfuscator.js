@@ -90,7 +90,8 @@ function obfuscate(sourceCode) {
     const final = `${HEADER} ${generateJunk(50)} ${antiDebug} ${buildDoubleVM(payload)}`
     return final.replace(/\s+/g, " ").trim()
   }
-
+  
+  // Si no es un loadstring simple, lo cifra con XOR antes de meterlo en la VM
   const seed = Date.now()
   const xorKeyBase = Math.floor(seed % 250) + 1
   const bytes = sourceCode.split('').map((char) => (char.charCodeAt(0) ^ xorKeyBase) & 0xFF)
@@ -98,6 +99,5 @@ function obfuscate(sourceCode) {
   let innerCode = `local ${VM_DATA}={${bytes.map(b => heavyMath(b)).join(',')}} local ${XOR_KEY}=${heavyMath(xorKeyBase)} local ${STR}="" for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end assert(loadstring(${STR}))() `
   const final = `${HEADER} ${generateJunk(80)} ${antiDebug} ${buildDoubleVM(innerCode)}`
   return final.replace(/\s+/g, " ").trim()
-}
-
-module.exports = { obfuscate }
+  }
+    
