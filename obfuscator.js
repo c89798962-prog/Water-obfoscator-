@@ -1,116 +1,54 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const app = express();
+function obfuscate(luaCode) {
+    const watermark = "--[[ this code it's protected by water obfoscatir:https://discord.gg/JUrq2QR4s ]]\n";
 
-// Middleware con límite aumentado para soportar scripts grandes
-app.use(bodyParser.json({ limit: "5mb" })); 
+    const mathKey = Math.floor(Math.random() * 150) + 25;
 
-/**
- * 🧬 GENERADOR DE VARIABLES TIPO "MURO DE CARACTERES"
- * Crea nombres de variables extremadamente difíciles de distinguir (I, l, 1, v)
- */
-function rn() {
-    const chars = ["I", "l", "v", "1", "2", "3"];
-    const starters = ["I", "l", "v"]; 
-    let res = starters[Math.floor(Math.random() * starters.length)];
-    for (let i = 0; i < 20; i++) {
-        res += chars[Math.floor(Math.random() * chars.length)];
+    let bytecode = [];
+    for (let i = 0; i < luaCode.length; i++) {
+        bytecode.push(luaCode.charCodeAt(i) + mathKey);
     }
-    return res;
-}
 
-/**
- * 🧮 MATH CODE ULTRA-AGRESIVO
- * Ofusca números mediante operaciones redundantes
- */
-function math(n) {
-    let a = Math.floor(Math.random() * 100) + 1;
-    let b = Math.floor(Math.random() * 50) + 1;
-    let c = Math.floor(Math.random() * 25) + 1;
-    
-    const mode = Math.floor(Math.random() * 4);
-    if (mode === 0) return `((${n}+${a})-${a})`;
-    if (mode === 1) return `((${n}-${b})+${b})`;
-    if (mode === 2) return `(((${n}*${c})/${c})+${a}-${a})`;
-    return `((${n}+${a}+${b})-${b}-${a})`;
-}
+    const bytecodeLength = bytecode.length;
 
-/**
- * 🌪️ GENERADOR DE "SOPA DE LUA" (Junk Code)
- * Inserta código inútil para confundir descompiladores y humanos
- */
-function junk(lines = 200) {
-    let o = "";
-    for (let i = 0; i < lines; i++) {
-        const type = Math.floor(Math.random() * 3);
-        if (type === 0) {
-            o += `local ${rn()}=(${Math.floor(Math.random()*999)}*${Math.floor(Math.random()*999)});`;
-        } else if (type === 1) {
-            o += `if ${Math.random()}>0.9 then local ${rn()}=function() return end end;`;
-        } else {
-            o += `do local ${rn()}=string.char(${Math.floor(Math.random()*255)}) end;`;
-        }
-    }
-    return o;
-}
-
-/**
- * 🔧 CONVERTIDOR DE STRING A TABLA OFUSCADA
- */
-function stringToTable(str) {
-    let arr = [];
-    for (let i = 0; i < str.length; i++) {
-        arr.push(math(str.charCodeAt(i)));
-    }
-    return "{" + arr.join(",") + "}";
-}
-
-/**
- * 💀 LA MÁQUINA DEL APOCALIPSIS (Virtual Machine fragmentada)
- */
-function VM(arr) {
-    let d = rn(), f = rn(), l = rn(), a = rn(), r = rn(), i = rn();
-    let tablePart1 = rn(), tablePart2 = rn();
-    
-    const splitIndex = Math.floor(arr.length / 2);
-    const lastComma = arr.lastIndexOf(',', splitIndex);
-    
-    const p1 = arr.slice(0, lastComma) + "}";
-    const p2 = "{" + arr.slice(lastComma + 1);
-
-    return `
-        ${junk(40)}
-        local ${tablePart1} = ${p1};
-        ${junk(20)}
-        local ${tablePart2} = ${p2};
-        local ${d} = {};
-        for _,v in pairs(${tablePart1}) do table.insert(${d}, v) end
-        for _,v in pairs(${tablePart2}) do table.insert(${d}, v) end
-        ${junk(30)}
-        local function ${f}(${a}) 
-            local ${r} = "" 
-            ${junk(10)}
-            for ${i} = 1, #${a} do 
-                ${r} = ${r} .. string.char(${a}[${i}]) 
-                if ${i}%100 == 0 then ${junk(1)} end
-            end 
-            return ${r} 
-        end; 
-        ${junk(40)}
-        local ${l} = loadstring(${f}(${d})); 
-        if ${l} then ${l}() end;
-        ${junk(50)}
+    let vmTemplate = `
+    local lM = ${mathKey}
+    local IIIIIIIIII1 = {${bytecode.join(',')}}
+    local vvv1 = string.char()
+    local v1 = 1
+    local v2 = ${bytecodeLength}
+    local v3 = 0
+    local KQ = function(lM_arg, lM_key) 
+        return string.char(lM_arg - lM_key) 
+    end
+    local HF = function(lM_val) 
+        local lM_math = math.random(1,5)
+        local lM_dummy = lM_math - lM_math
+        v3 = lM_val + lM_dummy
+        return lM
+    end
+    local W8 = function(lM_str, lM_char) 
+        return lM_str .. lM_char 
+    end
+    local SX = function()
+        while v1 <= v2 do
+            local lM_inst = IIIIIIIIII1[v1]
+            HF(lM_inst)
+            local lM_temp = KQ(v3, lM)
+            vvv1 = W8(vvv1, lM_temp)
+            v1 = v1 + 1
+            local lM_fake = lM
+        end
+    end
+    SX()
+    local lM_exec = loadstring or load
+    lM_exec(vvv1)()
     `;
+
+    let compressedLua = vmTemplate.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return watermark + compressedLua;
 }
 
-function minify(code) {
-    return code.replace(/\s+/g, " ").trim();
-}
-
-function advancedScanner(code) {
-    let headList = [];
-    const placeholders = [];
-    const protectRegex = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g;
+module.exports = { obfuscate };    const protectRegex = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g;
     
     let safeCode = code.replace(protectRegex, (m) => {
         const id = `__T${placeholders.length}__`;
