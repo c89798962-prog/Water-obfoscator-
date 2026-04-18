@@ -1,8 +1,8 @@
 const DISCORD = "https://discord.gg/UttE8VYAY"
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
-const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv","I2","l2","vI","Iv"]
-const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","Kp","Hx","Wn","Sr","Rm","Nz","Jf","Ug"]
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
 
 function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
@@ -49,6 +49,24 @@ function applyCFF(blocks) {
   return lua
 }
 
+function buildTrueVM(payloadBytes) {
+  const STACK = generateIlName()
+  const MEM = generateIlName()
+  const PTR = generateIlName()
+  
+  let vmCore = `local ${STACK}={} local ${MEM}={${payloadBytes.map(b => heavyMath(b)).join(',')}} `
+  vmCore += `local ${PTR}=${heavyMath(1)} while ${PTR}<=(#${MEM}) do `
+  vmCore += `table.insert(${STACK}, string.char(${MEM}[${PTR}])) ${PTR}=${PTR}+${heavyMath(1)} end `
+  vmCore += `local _e = "" for _,v in pairs(${STACK}) do _e=_e..v end assert(loadstring(_e))() `
+  
+  return vmCore
+}
+
+function buildDoubleVM(payloadBytes) {
+  const innerVM = buildTrueVM(payloadBytes)
+  return buildSingleVM(innerVM, 7)
+}
+
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount)
   const realIdx = Math.floor(Math.random() * handlerCount)
@@ -72,34 +90,27 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-function buildDoubleVM(payload) {
-  return buildSingleVM(buildSingleVM(payload, 5), 7)
-}
-
 function obfuscate(sourceCode) {
-  if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end if tostring(string.char):find(string.char(104,111,111,107)) or tostring(loadstring):find(string.char(104,111,111,107)) then while true do end end `
+  if (!sourceCode) return '--ERROR'
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
   
+  let rawPayload = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
 
   if (match) {
     const url = match[1]
-    // La URL se cifra y se inyecta directamente como una instrucción de la VM profunda
-    const urlBytewise = url.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
-    const payload = `loadstring(game:HttpGet(string.char(${urlBytewise})))()`
-    const final = `${HEADER} ${generateJunk(50)} ${antiDebug} ${buildDoubleVM(payload)}`
-    return final.replace(/\s+/g, " ").trim()
+    const urlBytes = url.split('').map(c => c.charCodeAt(0)).join(',')
+    rawPayload = `loadstring(game:HttpGet(string.char(${urlBytes})))()`
+  } else {
+    rawPayload = sourceCode
   }
 
-  const seed = Date.now()
-  const xorKeyBase = Math.floor(seed % 250) + 1
-  const bytes = sourceCode.split('').map((char) => (char.charCodeAt(0) ^ xorKeyBase) & 0xFF)
-  const VM_DATA = generateIlName(), XOR_KEY = generateIlName(), STR = generateIlName()
-  let innerCode = `local ${VM_DATA}={${bytes.map(b => heavyMath(b)).join(',')}} local ${XOR_KEY}=${heavyMath(xorKeyBase)} local ${STR}="" for _,v in pairs(${VM_DATA}) do ${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) end assert(loadstring(${STR}))() `
-  const final = `${HEADER} ${generateJunk(80)} ${antiDebug} ${buildDoubleVM(innerCode)}`
-  return final.replace(/\s+/g, " ").trim()
+  const payloadBytes = rawPayload.split('').map(c => c.charCodeAt(0))
+  const finalVM = buildDoubleVM(payloadBytes)
+  
+  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${finalVM}`
+  return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
-    
