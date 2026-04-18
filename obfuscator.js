@@ -1,5 +1,5 @@
 const DISCORD = "https://discord.gg/UttE8VYAY"
-const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
+const HEADER = `--[[ water obfoscator EXTREME FINAL : ${DISCORD} ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
@@ -27,6 +27,11 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
+function mba() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+}
+
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
@@ -38,117 +43,103 @@ function generateJunk(lines = 100) {
   return j
 }
 
+// PROTECCIÓN DE HUB: Mapeo agresivo de API de Roblox
+const MAPEO = {
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+};
+
+function detectAndApplyMappings(code) {
+  let modified = code, headers = "";
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech === "Aggressive Renaming") { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech === "String to Math") replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match) => `game[${replacement}]`);
+    }
+  }
+  return headers + modified;
+}
+
 function applyCFF(blocks) {
   const stateVar = generateIlName()
   let lua = `local ${stateVar}=${heavyMath(1)} while true do `
   for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
-    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
+    lua += `if ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
   }
   lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
   return lua
 }
 
-// LA MAGIA ESTÁ AQUÍ: La URL dividida, envuelta y reconstruida
+// TRUE VM: URL dividida, envuelta y reconstruida con llave XOR mutante
 function buildTrueVM(urlStr) {
-  const STACK = generateIlName()
-  const PTR = generateIlName()
-  const CHUNK_IDX = generateIlName()
+  const STACK = generateIlName(); const PTR = generateIlName();
+  const CHUNK_IDX = generateIlName(); const KEY = generateIlName();
   
-  // 1. DIVIDIDA: Partimos la URL en 4 fragmentos distintos
-  const p = Math.ceil(urlStr.length / 4)
-  const chunks = [
-    urlStr.slice(0, p),
-    urlStr.slice(p, p * 2),
-    urlStr.slice(p * 2, p * 3),
-    urlStr.slice(p * 3)
-  ].filter(c => c.length > 0) // Filtramos por si la URL es corta
-  
-  let vmCore = `local ${STACK}={} `
-  let memVars = []
-  
-  // 2. ENVUELTA: Cada fragmento es una tabla de memoria independiente envuelta en heavyMath
+  const p = Math.ceil(urlStr.length / 4);
+  const chunks = [urlStr.slice(0, p), urlStr.slice(p, p*2), urlStr.slice(p*2, p*3), urlStr.slice(p*3)];
+  const seed = Math.floor(Math.random() * 150) + 50;
+
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `;
+  let memVars = [];
+  let globalPos = 0;
+
   chunks.forEach((chunk) => {
-    const memName = generateIlName()
-    memVars.push(memName)
-    const bytes = chunk.split('').map(c => c.charCodeAt(0))
-    vmCore += `local ${memName}={${bytes.map(b => heavyMath(b)).join(',')}} `
-  })
+    if (!chunk) return;
+    const memName = generateIlName();
+    memVars.push(memName);
+    const enc = chunk.split('').map(c => {
+      let b = c.charCodeAt(0) ^ (seed + globalPos * 2);
+      globalPos++;
+      return b;
+    });
+    vmCore += `local ${memName}={${enc.map(b => heavyMath(b)).join(',')}} `;
+  });
+
+  vmCore += `local _pool={${memVars.join(',')}} local _pos=0 `;
+  vmCore += `for ${CHUNK_IDX}=1,#_pool do local _m=_pool[${CHUNK_IDX}] `;
+  vmCore += `for ${PTR}=1,#_m do `;
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(_m[${PTR}], ${KEY}+(_pos*2)))) `;
+  vmCore += `_pos=_pos+1 end end `;
+  vmCore += `local _res=table.concat(${STACK}) ${STACK}=nil `;
+  vmCore += `assert(loadstring(game:HttpGet(_res)))() `;
   
-  // 3. RECONSTRUIDA: La VM tiene un motor que ensambla los fragmentos
-  vmCore += `local _memPool={${memVars.join(',')}} `
-  vmCore += `local ${CHUNK_IDX}=${heavyMath(1)} `
-  vmCore += `while ${CHUNK_IDX}<=(#_memPool) do `
-  vmCore += `local _curMem=_memPool[${CHUNK_IDX}] `
-  vmCore += `local ${PTR}=${heavyMath(1)} `
-  vmCore += `while ${PTR}<=(#_curMem) do `
-  vmCore += `table.insert(${STACK}, string.char(_curMem[${PTR}])) `
-  vmCore += `${PTR}=${PTR}+${heavyMath(1)} `
-  vmCore += `end `
-  vmCore += `${CHUNK_IDX}=${CHUNK_IDX}+${heavyMath(1)} `
-  vmCore += `end `
-  
-  // Ejecución final según lo reconstruido
-  vmCore += `local _finalUrl=table.concat(${STACK}) `
-  
-  // Si ofuscamos una URL (que es tu prioridad) usa HttpGet, si es código puro, loadstring directo
-  if (urlStr.includes("http") || urlStr.includes("github")) {
-    vmCore += `assert(loadstring(game:HttpGet(_finalUrl)))() `
-  } else {
-    vmCore += `assert(loadstring(_finalUrl))() `
-  }
-  
-  return vmCore
+  return vmCore;
 }
 
 function buildDoubleVM(urlStr) {
-  const innerVM = buildTrueVM(urlStr)
-  return buildSingleVM(innerVM, 7)
-}
-
-function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount)
-  const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = generateIlName()
-  let out = `local lM={} ` 
+  const innerVM = buildTrueVM(urlStr);
+  const handlers = pickHandlers(7);
+  const realIdx = Math.floor(Math.random() * 7);
+  const DISPATCH = generateIlName();
+  
+  let out = `local lM={} `;
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(10)} ${innerCode} end `
-    } else {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return nil end `
-    }
+    if (i === realIdx) out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(10)} ${innerVM} end `;
+    else out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} end `;
   }
   out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
+  for (let i = 0; i < handlers.length; i++) out += `[${heavyMath(i + 1)}]=${handlers[i]},`
   out += `} `
-  let execBlocks = []
-  for (let i = 0; i < handlers.length; i++) {
-    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
-  }
-  out += applyCFF(execBlocks)
-  return out
+  let exec = handlers.map((_, i) => `${DISPATCH}[${heavyMath(i+1)}](lM)`);
+  out += applyCFF(exec);
+  return out;
 }
 
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
+  if (!sourceCode) return '--ERROR';
+  const antiDebug = `local _c=os.clock local _t=_c() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `;
   
-  let payloadToProtect = ""
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = sourceCode.match(isLoadstringRegex)
+  let urlMatch = sourceCode.match(/loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i);
+  let finalPayload = urlMatch ? urlMatch[1] : detectAndApplyMappings(sourceCode);
 
-  if (match) {
-    // Extraemos la URL sola para dividirla en la VM
-    payloadToProtect = match[1]
-  } else {
-    payloadToProtect = sourceCode
-  }
-
-  const finalVM = buildDoubleVM(payloadToProtect)
-  
-  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${finalVM}`
-  return result.replace(/\s+/g, " ").trim()
+  const finalVM = buildDoubleVM(finalPayload);
+  return `${HEADER} ${generateJunk(50)} ${antiDebug} ${finalVM}`.replace(/\s+/g, " ").trim();
 }
 
-module.exports = { obfuscate }
-    
+module.exports = { obfuscate };
+                                  
