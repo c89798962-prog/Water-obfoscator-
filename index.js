@@ -1,4 +1,4 @@
-Si agrego comandos puedo poner la función de esos comandos en index.js const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
 const { obfuscate } = require('./obfuscator');
 const https = require('https');
 const http = require('http');
@@ -72,4 +72,4 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-client.login(TOKEN);?
+client.login(TOKEN);
