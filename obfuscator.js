@@ -117,7 +117,7 @@ function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
 
   // ==========================================
-  // ESTADO 1: SISTEMA DE DETECCIÓN LOADSTRING
+  // ESTADO 1: SISTEMA DE DETECCIÓN LOADSTRING (Ahora incluye VM y Variables I1, v1)
   // ==========================================
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
@@ -127,18 +127,28 @@ function obfuscate(sourceCode) {
     // Dividimos la URL con Math Code seguro
     const urlBytes = url.split('').map(c => lightMath(c.charCodeAt(0))).join(',')
     
-    // Anti-Debug
-    let prot = `local _clk=os.clock if _clk then local _t=_clk() for _=1,1500 do end if _clk()-_t>3.5 then while true do end end end `
-    // Anti-Tamper
-    prot += `if type(string.char)~="function" or tostring(string.char):lower():find("hook") then while true do end end `
+    let innerLoadstring = ''
     
-    // Retornamos el formato exacto requerido, envuelto para ejecutar las protecciones antes de cargar
-    const finalURLCode = `(function() ${prot} loadstring(game:HttpGet(string.char(${urlBytes})))() end)()`
-    return minify(HEADER + " " + finalURLCode)
+    // Anti-Debug
+    innerLoadstring += `local _clk=os.clock if _clk then local _t=_clk() for _=1,1500 do end if _clk()-_t>3.5 then while true do end end end `
+    // Anti-Tamper
+    innerLoadstring += `if type(string.char)~="function" or tostring(string.char):lower():find("hook") then while true do end end `
+    
+    // Ejecutar el loadstring dentro de la VM
+    innerLoadstring += `local ex=getfenv()["load"+"string"] or load local p=ex(game:HttpGet(string.char(${urlBytes}))) if p then p() end `
+
+    let vmLoadstring = HEADER + '\n'
+    vmLoadstring += generateJunk(60) // Añade las variables I1, v1, v2, y math code
+    vmLoadstring += buildVMWrapper(innerLoadstring) // Envuelve todo en la máquina virtual
+    vmLoadstring += generateJunk(60)
+
+    vmLoadstring = minify(vmLoadstring)
+    
+    return `return function() do do ${vmLoadstring} end end end`
   }
 
   // ==========================================
-  // ESTADO 2: OFUSCACIÓN DE SCRIPT NORMAL (VM)
+  // ESTADO 2: OFUSCACIÓN DE SCRIPT NORMAL (VM, Junk, Math y ambos Anti-Tamper/Debug)
   // ==========================================
   let preProcessed = detectAndApplyMappings(sourceCode)
   const seed = Date.now()
@@ -167,8 +177,9 @@ function obfuscate(sourceCode) {
   innerCode += `${STR}=${STR}..string.char(bit32.bxor(v,${XOR_KEY})) `
   innerCode += `end return ${STR} end `
   
-  // INYECTAMOS SOLO ANTI-DEBUG (Sin Anti-Tamper, como pediste)
+  // INYECTAMOS ANTI-DEBUG Y ANTI-TAMPER
   innerCode += `local _clk=os.clock if _clk then local _t=_clk() for _=1,1500 do end if _clk()-_t>3.5 then while true do end end end `
+  innerCode += `if type(string.char)~="function" or tostring(string.char):lower():find("hook") then while true do end end `
 
   // Ejecutador
   innerCode += `local ex=getfenv()["load"+"string"] or load local p=ex(${DEC}()) if p then p() end `
@@ -184,4 +195,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
-    
+      
