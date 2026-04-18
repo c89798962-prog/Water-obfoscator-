@@ -27,6 +27,12 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
+// NUEVO: Extraído de Mimosa (Mixed Boolean Arithmetic)
+function mba() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+}
+
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
@@ -36,6 +42,39 @@ function generateJunk(lines = 100) {
     else j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
   }
   return j
+}
+
+// NUEVO: El motor de Mapeo de Mimosa para ofuscar el 60% de los Hubs
+const MAPEO = {
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","TextBox":"Aggressive Renaming","ImageLabel":"Size-Based Execution Switch",
+  "Humanoid":"Dynamic Junk","Player":"Fake Flow","Character":"Math Encoding","Part":"Literal Obfuscation",
+  "Camera":"Table Indirection","TweenService":"Fake Flow","RunService":"Virtual Machine",
+  "UserInputService":"Mixed Boolean Arithmetic","RemoteEvent":"Fake Flow","Workspace":"Reverse If",
+  "Lighting":"Size-Based Execution Switch","Players":"Fake Flow","ReplicatedStorage":"Table Indirection","StarterGui":"String to Math"
+};
+
+function detectAndApplyMappings(code) {
+  let modified = code, headers = "";
+  const sorted = Object.entries(MAPEO).sort((a, b) => b[0].length - a[0].length);
+  for (const [word, tech] of sorted) {
+    const regex = new RegExp(`(game\\s*\\.\\s*|\\b\\.\\s*)?\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Table Indirection")) { const t = generateIlName(); headers += `local ${t}={"${word}"};`; replacement = `${t}[1]`; }
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
+      else if (tech.includes("Fake Flow")) replacement = `(function()return ${mba()}==1 and"${word}"or"${word}"end)()`;
+      else if (tech.includes("Virtual Machine")) replacement = `loadstring("return '${word}'")()`; 
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match, prefix) => {
+        if (prefix) return prefix.includes("game") ? `game[${replacement}]` : `[${replacement}]`;
+        return replacement;
+      });
+    }
+  }
+  return headers + modified;
 }
 
 function applyCFF(blocks) {
@@ -53,10 +92,23 @@ function buildTrueVM(payloadBytes) {
   const STACK = generateIlName()
   const MEM = generateIlName()
   const PTR = generateIlName()
+  const XOR_KEY = generateIlName() // Extraído de Mimosa
+
+  // MEJORA EXTREMA: Cifrado XOR Indexado. 
+  // Ya no guardamos la URL tal cual, los bytes mutan dependiendo de su posición.
+  const seed = Date.now() + Math.floor(Math.random() * 99999);
+  const xorKeyBase = Math.floor(seed % 255) + 1;
+  const encryptedBytes = payloadBytes.map((b, i) => {
+    return (b ^ (xorKeyBase + i * 5)) & 0xFF;
+  });
   
-  let vmCore = `local ${STACK}={} local ${MEM}={${payloadBytes.map(b => heavyMath(b)).join(',')}} `
+  let vmCore = `local ${STACK}={} local ${MEM}={${encryptedBytes.map(b => heavyMath(b)).join(',')}} `
+  vmCore += `local ${XOR_KEY}=${heavyMath(xorKeyBase)} ` // Clave base ofuscada
   vmCore += `local ${PTR}=${heavyMath(1)} while ${PTR}<=(#${MEM}) do `
-  vmCore += `table.insert(${STACK}, string.char(${MEM}[${PTR}])) ${PTR}=${PTR}+${heavyMath(1)} end `
+  
+  // La VM ahora tiene que resolver el cifrado en tiempo real (XOR + Posición * 5)
+  vmCore += `local _dec = bit32.bxor(${MEM}[${PTR}], ${XOR_KEY} + (${PTR} - 1) * 5) `
+  vmCore += `table.insert(${STACK}, string.char(_dec)) ${PTR}=${PTR}+${heavyMath(1)} end `
   vmCore += `local _e = "" for _,v in pairs(${STACK}) do _e=_e..v end assert(loadstring(_e))() `
   
   return vmCore
@@ -74,9 +126,10 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(10)} ${innerCode} end `
+      // SHADOWING: "local lM=lM;" extraído de Mimosa para confundir rastreadores
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(10)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} return nil end `
     }
   }
   out += `local ${DISPATCH}={`
@@ -103,7 +156,9 @@ function obfuscate(sourceCode) {
     const urlBytes = url.split('').map(c => c.charCodeAt(0)).join(',')
     rawPayload = `loadstring(game:HttpGet(string.char(${urlBytes})))()`
   } else {
-    rawPayload = sourceCode
+    // NUEVO: Si es un Hub gigante, aplicamos el Mapeo de Mimosa
+    // Esto destruye el 60% del código legible antes de meterlo a la VM
+    rawPayload = detectAndApplyMappings(sourceCode)
   }
 
   const payloadBytes = rawPayload.split('').map(c => c.charCodeAt(0))
