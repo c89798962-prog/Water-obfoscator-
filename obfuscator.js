@@ -1,3 +1,5 @@
+const DISCORD = "https://discord.gg/UttE8VYAY"
+
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
@@ -193,58 +195,27 @@ function buildTripleVM(payloadStr) {
 
 // NUEVO: Generador de Anti-Debugs y Anti-Tampers (Se inyecta en Lua)
 function getExtraProtections() {
-  // 6 Anti-Debugs (Añadido 1 extra)
-  // 1: Timing / Speedhack check (matemática pesada para medir delay)
-  // 2: Detección de hook en debug.traceback
-  // 3: Pcall Integrity (Detección de intercepción de errores/hooking global)
-  // 4: Detección de Freeze/Modificación en metatabla global _G
-  // 5: Detección de manipulación en 'require' built-in
-  // 6: Detección de hook encubierto en debug.getinfo
   const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end if debug and debug.traceback then local _tr=debug.traceback() if string.find(string.lower(_tr),"hook") then while true do end end end local _s,_e=pcall(function() error("!AD") end) if not string.find(tostring(_e),"!AD") then while true do end end if getmetatable(_G) then while true do end end if type(require)=="function" and not pcall(function() return require end) then while true do end end if type(debug)=="table" and debug.getinfo then local _i=debug.getinfo(1,"S") if _i and _i.what~="Lua" and _i.what~="main" and _i.what~="C" then while true do end end end `;
-
-  // 12 Anti-Tampers (Añadidos 2 extras)
-  // 1: Integridad de constantes matemáticas (math.pi)
-  // 2: Integridad de funciones Bit32 (bxor)
-  // 3: Integridad de 'tostring' (Evita sobrescritura)
-  // 4: Integridad de 'string.match' (Regex/Pattern)
-  // 5: Integridad de 'coroutine.create'
-  // 6: Integridad de 'table.concat'
-  // 7: Flujo temporal del OS (Detección de manipulación de os.time)
-  // 8: Integridad lógica de math.abs
-  // 9: Detección de recolección de basura anómala (gcinfo)
-  // 10: Integridad del iterador built-in 'next'
-  // 11: Integridad de string.len (Verifica bypasses de strings)
-  // 12: Integridad de table.insert
   const antiTampers = `if math.pi<3.14 or math.pi>3.15 then while true do end end if bit32 and bit32.bxor(10,5)~=15 then while true do end end if type(tostring)~="function" then while true do end end if not string.match("chk","^c.*k$") then while true do end end if type(coroutine.create)~="function" then while true do end end if type(table.concat)~="function" then while true do end end local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then while true do end end if math.abs(-10)~=10 then while true do end end if gcinfo and gcinfo()<0 then while true do end end if type(next)~="function" then while true do end end if string.len("a")~=1 then while true do end end if type(table.insert)~="function" then while true do end end `;
-
   return antiDebugs + antiTampers;
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
-  
-  // Anti-Debug Original mantenido intacto
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
-  
-  // Agregamos las nuevas protecciones
   const extraProtections = getExtraProtections()
-  
   let payloadToProtect = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
-
   if (match) {
     payloadToProtect = match[1]
   } else {
     payloadToProtect = detectAndApplyMappings(sourceCode)
   }
-
-  // Ahora se envuelve en la Triple VM (La cual llama a la Double y esta a la True VM)
   const finalVM = buildTripleVM(payloadToProtect)
-  
-  // Ensamblamos todo: HEADER -> Junk -> AD Original -> AD/AT Nuevos -> VM
   const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
+                 
