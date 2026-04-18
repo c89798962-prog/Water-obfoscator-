@@ -1,4 +1,4 @@
- const DISCORD = "https://discord.gg/UttE8VYAY"
+const DISCORD = "https://discord.gg/UttE8VYAY"
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
@@ -27,6 +27,35 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
+// TÉCNICA MIMOSA: Mixed Boolean Arithmetic (MBA)
+function mba() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+}
+
+// TÉCNICA MIMOSA: API Mapping para protección de Hubs
+const MAPEO = {
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+};
+
+function detectAndApplyMappings(code) {
+  let modified = code, headers = "";
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match) => `game[${replacement}]`);
+    }
+  }
+  return headers + modified;
+}
+
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
@@ -49,21 +78,50 @@ function applyCFF(blocks) {
   return lua
 }
 
-function buildTrueVM(payloadBytes) {
+// TÉCNICA MIMOSA: URL dividida, envuelta y cifrada con XOR dinámico (llave mutante)
+function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
-  const MEM = generateIlName()
   const PTR = generateIlName()
+  const KEY = generateIlName()
   
-  let vmCore = `local ${STACK}={} local ${MEM}={${payloadBytes.map(b => heavyMath(b)).join(',')}} `
-  vmCore += `local ${PTR}=${heavyMath(1)} while ${PTR}<=(#${MEM}) do `
-  vmCore += `table.insert(${STACK}, string.char(${MEM}[${PTR}])) ${PTR}=${PTR}+${heavyMath(1)} end `
-  vmCore += `local _e = "" for _,v in pairs(${STACK}) do _e=_e..v end assert(loadstring(_e))() `
+  const p = Math.ceil(payloadStr.length / 4)
+  const chunks = [payloadStr.slice(0, p), payloadStr.slice(p, p*2), payloadStr.slice(p*2, p*3), payloadStr.slice(p*3)].filter(s => s.length > 0)
+  
+  const seed = Math.floor(Math.random() * 150) + 50
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+  let memVars = []
+  let globalPos = 0
+
+  chunks.forEach((chunk) => {
+    const memName = generateIlName()
+    memVars.push(memName)
+    const encrypted = chunk.split('').map(c => {
+      let b = c.charCodeAt(0) ^ (seed + globalPos * 2)
+      globalPos++
+      return b
+    })
+    vmCore += `local ${memName}={${encrypted.map(b => heavyMath(b)).join(',')}} `
+  })
+
+  vmCore += `local _pool={${memVars.join(',')}} local _pos=0 `
+  vmCore += `for i=1,#_pool do local _m=_pool[i] `
+  vmCore += `for ${PTR}=1,#_m do `
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(_m[${PTR}], ${KEY}+(_pos*2)))) `
+  vmCore += `_pos=_pos+1 end end `
+  
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+  
+  if (payloadStr.includes("http")) {
+    vmCore += `assert(loadstring(game:HttpGet(_e)))() `
+  } else {
+    vmCore += `assert(loadstring(_e))() `
+  }
   
   return vmCore
 }
 
-function buildDoubleVM(payloadBytes) {
-  const innerVM = buildTrueVM(payloadBytes)
+function buildDoubleVM(payloadStr) {
+  const innerVM = buildTrueVM(payloadStr)
   return buildSingleVM(innerVM, 7)
 }
 
@@ -74,9 +132,10 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(10)} ${innerCode} end `
+      // TÉCNICA MIMOSA: Variable Shadowing "local lM=lM"
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(10)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} return nil end `
     }
   }
   out += `local ${DISPATCH}={`
@@ -94,23 +153,20 @@ function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
   
-  let rawPayload = ""
+  let payloadToProtect = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
 
   if (match) {
-    const url = match[1]
-    const urlBytes = url.split('').map(c => c.charCodeAt(0)).join(',')
-    rawPayload = `loadstring(game:HttpGet(string.char(${urlBytes})))()`
+    payloadToProtect = match[1]
   } else {
-    rawPayload = sourceCode
+    payloadToProtect = detectAndApplyMappings(sourceCode)
   }
 
-  const payloadBytes = rawPayload.split('').map(c => c.charCodeAt(0))
-  const finalVM = buildDoubleVM(payloadBytes)
-  
+  const finalVM = buildDoubleVM(payloadToProtect)
   const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
+                                 
