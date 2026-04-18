@@ -27,14 +27,15 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
-function generateJunk(lines = 20) {
-  let j = ''
-  for (let i = 0; i < lines; i++) {
-    const r = Math.random()
-    if (r < 0.5) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-    else j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
+function applyCFF(blocks) {
+  const stateVar = generateIlName()
+  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
+  for (let i = 0; i < blocks.length; i++) {
+    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
+    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
   }
-  return j
+  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
+  return lua
 }
 
 function buildSingleVM(innerCode, handlerCount) {
@@ -52,48 +53,47 @@ function buildSingleVM(innerCode, handlerCount) {
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
   out += `} `
-  out += `${DISPATCH}[${heavyMath(realIdx + 1)}](lM) `
+  let execBlocks = []
+  for (let i = 0; i < handlers.length; i++) {
+    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
+  }
+  out += applyCFF(execBlocks)
   return out
+}
+
+function buildTripleVM(payload) {
+  return buildSingleVM(buildSingleVM(buildSingleVM(payload, 4), 6), 8)
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
-  
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,100000 do end if os.clock()-_t>5.5 then while true do end end `
   
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
 
-  let payload = ""
+  let corePayload = ""
   if (match) {
-    const url = match[1]
-    const urlBytewise = url.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
-    payload = `loadstring(game:HttpGet(string.char(${urlBytewise})))()`
+    const urlBytewise = match[1].split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
+    corePayload = `loadstring(game:HttpGet(string.char(${urlBytewise})))()`
   } else {
-    const bytes = sourceCode.split('').map(char => char.charCodeAt(0))
-    payload = `assert(loadstring(string.char(${bytes.map(b => heavyMath(b)).join(',')})))()`
+    const bytes = sourceCode.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
+    corePayload = `assert(loadstring(string.char(${bytes})))()`
   }
 
-  const vmInsideBytecode = buildSingleVM(payload, 5)
-  
-  const bytecodeData = []
-  for(let i=0; i<vmInsideBytecode.length; i++) {
-      bytecodeData.push(vmInsideBytecode.charCodeAt(i))
-  }
-
-  const chunkedBytecode = []
-  const size = Math.ceil(bytecodeData.length / 5)
-  for (let i = 0; i < bytecodeData.length; i += size) {
-      chunkedBytecode.push(bytecodeData.slice(i, i + size).map(b => heavyMath(b)).join(','))
-  }
+  const tripleVM = buildTripleVM(corePayload)
+  const bytecode = []
+  for(let i=0; i<tripleVM.length; i++) { bytecode.push(tripleVM.charCodeAt(i)) }
 
   const BC_VAR = generateIlName()
   const STR_VAR = generateIlName()
   
-  let finalLua = `${HEADER} ${generateJunk(10)} ${antiDebug} `
-  finalLua += `local ${BC_VAR} = {\n`
-  finalLua += chunkedBytecode.slice(0, 5).map(line => `  {${line}}`).join(',\n')
-  finalLua += `\n} `
+  let finalLua = `${HEADER} ${antiDebug} `
+  finalLua += `local ${BC_VAR} = {`
+  for(let i=0; i<bytecode.length; i+=Math.ceil(bytecode.length/5)) {
+    finalLua += `{${bytecode.slice(i, i+Math.ceil(bytecode.length/5)).map(b => heavyMath(b)).join(',')}},`
+  }
+  finalLua += `} `
   finalLua += `local ${STR_VAR}="" for _,v in pairs(${BC_VAR}) do for _,b in pairs(v) do ${STR_VAR}=${STR_VAR}..string.char(b) end end `
   finalLua += `assert(loadstring(${STR_VAR}))()`
 
@@ -101,4 +101,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
-  
+                  
