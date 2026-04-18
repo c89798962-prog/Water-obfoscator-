@@ -126,21 +126,18 @@ function buildVMWrapper(innerCode) {
 function obfuscate(sourceCode) {
   if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
 
-  // 1. DETECCIÓN DE LOADSTRING (Solo ofusca la URL)
+  // 1. SI ES UN SCRIPT DE CARGA (Oculta la URL y mantiene la estructura para ejecutar)
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
   const match = sourceCode.match(isLoadstringRegex);
 
   if (match) {
     const url = match[1];
-    // Convertimos la URL en matemáticas (vmajxine revuelta)
     const urlBytes = url.split('').map(c => c.charCodeAt(0));
     const obfuscatedUrl = urlBytes.map(b => lightMath(b)).join(',');
-    
-    // Retornamos el formato exacto que pediste
     return `loadstring(game:HttpGet(string.char(${obfuscatedUrl})))()`;
   }
 
-  // 2. SI NO ES LOADSTRING (Código normal)
+  // 2. SI ES CÓDIGO NORMAL (Ofusca y asegura que SE EJECUTE)
   let preProcessed = detectAndApplyMappings(sourceCode);
   const seed = Date.now() + Math.random() * 99999999;
   const xorKeyBase = Math.floor(seed % 2147483647) + 1;
@@ -165,62 +162,9 @@ function obfuscate(sourceCode) {
   innerCode += `${PC}=${PC}+1;`;
   innerCode += `end;return ${STACK};end;`;
   
-  // AQUÍ ESTÁ EL CAMBIO: No hay rastro de loadstring. Solo retorna el código ofuscado.
-  innerCode += `return ${DECODER}();`;
-
-  let vm = HEADER + '\n';
-  vm += generateJunk(144);
-  vm += buildVMWrapper(innerCode);
-  vm += generateJunk(126);
-
-  // Mantenemos los caracteres necesarios para que Lua no dé error de sintaxis
-  vm = vm.replace(/\n/g, ' ').replace(/\s+/g, ' ').replace(/\s*([=+\-*/{},;])\s*/g, '$1');
-  return `return(function()${vm}end)();`;
-}
-
-module.exports = { obfuscate };
-    out += `[${i + 1}]=${handlers[i]},`;
-  }
-  out += `};`;
-
-  for (let i = 0; i < handlers.length; i++) {
-    if (i !== realIdx) out += `${DISPATCH}[${i + 1}](lM);`;
-  }
-
-  out += `${DISPATCH}[${realIdx + 1}](lM);`;
-
-  return out;
-}
-
-function obfuscate(sourceCode) {
-  if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR';
-
-  let preProcessed = detectAndApplyMappings(sourceCode);
-  const seed = Date.now() + Math.random() * 99999999;
-  const xorKeyBase = Math.floor(seed % 2147483647) + 1;
-  const bytes = preProcessed.split('').map((char, i) => {
-    let val = char.charCodeAt(0) ^ (xorKeyBase + i * 5);
-    val = val ^ (xorKeyBase >>> 4);
-    return val & 0xFF;
-  });
-
-  const VM_DATA = generateIlName(), XOR_KEY = generateIlName();
-  const PC = generateIlName(), STACK = generateIlName(), DECODER = generateIlName();
-
-  let innerCode = '';
-  innerCode += `local ${VM_DATA}=${stringToMath(JSON.stringify(bytes))};`;
-  innerCode += `local ${XOR_KEY}=${mba()};`;
-  innerCode += `local ${PC}=1;local ${STACK}="";`;
-  innerCode += `local ${DECODER}=function()`;
-  innerCode += generateJunk(20);
-  innerCode += `while ${PC}<=#${VM_DATA} do `;
-  innerCode += `local lM=${VM_DATA}[${PC}];`; 
-  // OJO AQUÍ: Este es un problema para Roblox
-  innerCode += `${STACK}=${STACK}..string.char(lM~${XOR_KEY});`;
-  innerCode += `${PC}=${PC}+1;`;
-  innerCode += `end;return ${STACK};end;`;
-  // OJO AQUÍ TAMBIÉN: Otro problema para Roblox
-  innerCode += `local payload=(loadstring or load)(${DECODER}());payload();`;
+  // RESTAURADO: Esta línea es la que hace que tu código funcione y no se quede como un simple texto inútil.
+  // Intenté ofuscarlo un poco más (getfenv) para que la palabra 'loadstring' no sea tan evidente a simple vista.
+  innerCode += `local ex=getfenv()["load"+"string"] or load; local p=ex(${DECODER}()); if p then p() end;`;
 
   let vm = HEADER + '\n';
   vm += generateJunk(144);
@@ -232,4 +176,3 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate };
-        
