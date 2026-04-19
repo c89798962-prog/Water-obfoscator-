@@ -19,9 +19,7 @@ function pickHandlers(count) {
 }
 
 function heavyMath(n) {
-  // Reducción del 80% del Math Code: el 80% de las veces devuelve solo el número.
   if (Math.random() < 0.8) return n.toString();
-  
   let a = Math.floor(Math.random() * 3000) + 500
   let b = Math.floor(Math.random() * 50) + 2
   let c = Math.floor(Math.random() * 800) + 10
@@ -29,13 +27,11 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
-// TÉCNICA MIMOSA: Mixed Boolean Arithmetic (MBA)
 function mba() {
   let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// TÉCNICA MIMOSA: API Mapping para protección de Hubs
 const MAPEO = {
   "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
   "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
@@ -84,7 +80,6 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// AQUÍ ESTÁ LA MAGIA REAL: División, Cifrado, Fake Math y Reconstrucción
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
   const KEY = generateIlName()
@@ -93,7 +88,6 @@ function buildTrueVM(payloadStr) {
   const seed = Math.floor(Math.random() * 200) + 50
   let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
 
-  // 1. Dividir en pequeños trozos
   const chunkSize = 15;
   let realChunks = [];
   for(let i = 0; i < payloadStr.length; i += chunkSize) {
@@ -103,7 +97,6 @@ function buildTrueVM(payloadStr) {
   let poolVars = [];
   let realOrder = [];
   
-  // 2. Preparar empaquetado: Mezclar reales con fakes (Math Code basura)
   let totalChunks = realChunks.length * 3; 
   let currentReal = 0;
 
@@ -111,10 +104,8 @@ function buildTrueVM(payloadStr) {
     let memName = generateIlName();
     poolVars.push(memName);
     
-    // Decidir si este bloque será real o basura
     if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      // BLOQUE REAL ENCRIPTADO
-      realOrder.push(i + 1); // Guardar posición en la que quedó
+      realOrder.push(i + 1);
       let chunk = realChunks[currentReal];
       let encryptedBytes = [];
       for(let j = 0; j < chunk.length; j++) {
@@ -123,7 +114,6 @@ function buildTrueVM(payloadStr) {
       vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
       currentReal++;
     } else {
-      // 3. BLOQUE BASURA FAKE MATH (Engaña a deobfuscators)
       let fakeBytes = [];
       let fakeLen = Math.floor(Math.random() * 20) + 5;
       for(let j = 0; j < fakeLen; j++) {
@@ -133,13 +123,9 @@ function buildTrueVM(payloadStr) {
     }
   }
 
-  // 4. Empaquetar todo en el pool
   vmCore += `local _pool={${poolVars.join(',')}} `;
-  
-  // 5. Crear el mapa de reconstrucción de la VM
   vmCore += `local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
 
-  // 6. Reconstrucción en runtime (Solo procesa los bloques reales, los falsos se quedan inútiles)
   const idxVar = generateIlName();
   const byteVar = generateIlName();
   vmCore += `for _, ${idxVar} in ipairs(${ORDER}) do `;
@@ -186,33 +172,47 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-// 10 VM MACHINES: Envolvemos la TrueVM en 9 SingleVMs dinámicas (9 + 1 = 10 VMs)
-function build10xVM(payloadStr) {
+// 12 VM MACHINES: TrueVM + 11 capas SingleVM = 12 VMs en total
+function build12xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
-  for (let i = 0; i < 9; i++) {
-    // Número aleatorio de handlers por capa para mayor confusión
+  for (let i = 0; i < 11; i++) {
     vm = buildSingleVM(vm, Math.floor(Math.random() * 4) + 4);
   }
   return vm;
 }
 
 function getExtraProtections() {
-  const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end if debug and debug.traceback then local _tr=debug.traceback() if string.find(string.lower(_tr),"hook") then while true do end end end local _s,_e=pcall(function() error("!AD") end) if not string.find(tostring(_e),"!AD") then while true do end end if getmetatable(_G) then while true do end end if type(require)=="function" and not pcall(function() return require end) then while true do end end if type(debug)=="table" and debug.getinfo then local _i=debug.getinfo(1,"S") if _i and _i.what~="Lua" and _i.what~="main" and _i.what~="C" then while true do end end end `;
-  
-  // Exactamente 12 Anti-Tampers
-  const antiTampers = `if math.pi<3.14 or math.pi>3.15 then while true do end end ` + 
-                      `if bit32 and bit32.bxor(10,5)~=15 then while true do end end ` +
-                      `if type(tostring)~="function" then while true do end end ` +
-                      `if not string.match("chk","^c.*k$") then while true do end end ` +
-                      `if type(coroutine.create)~="function" then while true do end end ` +
-                      `if type(table.concat)~="function" then while true do end end ` +
-                      `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then while true do end end ` +
-                      `if math.abs(-10)~=10 then while true do end end ` +
-                      `if gcinfo and gcinfo()<0 then while true do end end ` +
-                      `if type(next)~="function" then while true do end end ` +
-                      `if string.len("a")~=1 then while true do end end ` +
-                      `if type(table.insert)~="function" then while true do end end `;
-  return antiDebugs + antiTampers;
+
+  // ── 5 ANTI-DEBUGGERS ultra frágiles ────────────────────────────────────────
+  // "Frágil" = trigger al menor indicio: 1 iteración de timing, traceback de 1 char, etc.
+  const antiDebuggers =
+    // AD-1: Timing ultra sensible — cualquier pausa mínima lo activa
+    `local _adT=os.clock() for _=1,1 do end if os.clock()-_adT>0.00001 then while true do end end ` +
+    // AD-2: Detecta si debug.traceback existe en absoluto (incluso vacío)
+    `if debug~=nil then while true do end end ` +
+    // AD-3: pcall con error propio — si el mensaje cambia 1 char, muere
+    `local _adOk,_adE=pcall(function() error("__vvmer__") end) if not _adOk and not string.find(tostring(_adE),"__vvmer__",1,true) then while true do end end ` +
+    // AD-4: getmetatable de _G — cualquier hook lo pone no-nil
+    `if rawget~=nil and getmetatable(_G)~=nil then while true do end end ` +
+    // AD-5: Si `print` fue reemplazada por algo distinto a function, muere
+    `if type(print)~="function" then while true do end end `;
+
+  // ── 12 ANTI-TAMPERS ────────────────────────────────────────────────────────
+  const antiTampers =
+    `if math.pi<3.14 or math.pi>3.15 then while true do end end ` +
+    `if bit32 and bit32.bxor(10,5)~=15 then while true do end end ` +
+    `if type(tostring)~="function" then while true do end end ` +
+    `if not string.match("chk","^c.*k$") then while true do end end ` +
+    `if type(coroutine.create)~="function" then while true do end end ` +
+    `if type(table.concat)~="function" then while true do end end ` +
+    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then while true do end end ` +
+    `if math.abs(-10)~=10 then while true do end end ` +
+    `if gcinfo and gcinfo()<0 then while true do end end ` +
+    `if type(next)~="function" then while true do end end ` +
+    `if string.len("a")~=1 then while true do end end ` +
+    `if type(table.insert)~="function" then while true do end end `;
+
+  return antiDebuggers + antiTampers;
 }
 
 function obfuscate(sourceCode) {
@@ -228,12 +228,11 @@ function obfuscate(sourceCode) {
     payloadToProtect = detectAndApplyMappings(sourceCode)
   }
   
-  // Aplicando las 10 VMs
-  const finalVM = build10xVM(payloadToProtect)
+  // 12 VMs
+  const finalVM = build12xVM(payloadToProtect)
   
   const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
-    
