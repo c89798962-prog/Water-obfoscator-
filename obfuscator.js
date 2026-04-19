@@ -1,4 +1,4 @@
-const DISCORD = "https://discord.gg/UttE8VYAY"
+ DISCORD = "https://discord.gg/UttE8VYAY"
 
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
@@ -112,23 +112,10 @@ function buildTrueVM(payloadStr) {
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
   
-  // === MÁQUINA VIRTUAL ANTI-HOOK (SOLUCIÓN A LA BURLA) ===
-  // 1. Ocultamos completamente la palabra "loadstring" y "HttpGet"
-  // 2. Usamos getrenv() para esquivar el hook que el cliente usó para imprimir el código
-  const VM = generateIlName()
-  vmCore += `local function ${VM}(_src) `
-  vmCore += `  local _L = string.char(108,111,97,100,115,116,114,105,110,103) ` // "loadstring"
-  vmCore += `  local _E = (type(getrenv)=="function" and getrenv()[_L]) or getfenv()[_L] or _G[_L] `
-  vmCore += `  if type(iscf)=="function" and not iscf(_E) then while true do end end ` // Crash si intentan hookearlo
-  vmCore += `  local _s, _r = pcall(_E, _src) `
-  vmCore += `  if _s and _r then return _r() else while true do end end `
-  vmCore += `end `
-
   if (payloadStr.includes("http")) {
-    vmCore += `local _H = string.char(72,116,116,112,71,101,116) ` // "HttpGet"
-    vmCore += `${VM}(game[_H](game, _e)) `
+    vmCore += `assert(loadstring(game:HttpGet(_e)))() `
   } else {
-    vmCore += `${VM}(_e) `
+    vmCore += `assert(loadstring(_e))() `
   }
   
   return vmCore
@@ -230,4 +217,4 @@ function obfuscate(sourceCode) {
   return result.replace(/\s+/g, " ").trim()
 }
 
-module.exports = { obfuscate }
+module.exports = { obfuscate }  
