@@ -81,50 +81,70 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// TÉCNICA MIMOSA MEJORADA: Dividida, encriptada, empaquetada y mezclada con Fake Junk Math
+// AQUÍ ESTÁ LA MAGIA REAL: División, Cifrado, Fake Math y Reconstrucción
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
-  const PTR = generateIlName()
   const KEY = generateIlName()
+  const ORDER = generateIlName()
   
-  const p = Math.ceil(payloadStr.length / 4)
-  const chunks = [payloadStr.slice(0, p), payloadStr.slice(p, p*2), payloadStr.slice(p*2, p*3), payloadStr.slice(p*3)].filter(s => s.length > 0)
-  
-  const seed = Math.floor(Math.random() * 150) + 50
+  const seed = Math.floor(Math.random() * 200) + 50
   let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
-  let memVars = []
-  let globalPos = 0
 
-  chunks.forEach((chunk) => {
-    // 1. INYECTAR JUNK CODE FALSO (Misma estructura matemática, pero no hace nada)
-    const fakeMemName = generateIlName()
-    const fakeData = Array.from({length: Math.floor(Math.random() * 40) + 15}, () => heavyMath(Math.floor(Math.random() * 255)))
-    vmCore += `local ${fakeMemName}={${fakeData.join(',')}} `
+  // 1. Dividir en pequeños trozos
+  const chunkSize = 15;
+  let realChunks = [];
+  for(let i = 0; i < payloadStr.length; i += chunkSize) {
+    realChunks.push(payloadStr.slice(i, i + chunkSize));
+  }
 
-    // 2. EMPAQUETADO Y ENCRIPTADO REAL
-    const memName = generateIlName()
-    memVars.push(memName) // Solo guardamos el real para el pool
-    const encrypted = chunk.split('').map(c => {
-      let b = c.charCodeAt(0) ^ (seed + globalPos * 2)
-      globalPos++
-      return b
-    })
-    vmCore += `local ${memName}={${encrypted.map(b => heavyMath(b)).join(',')}} `
-
-    // 3. OTRA CAPA DE JUNK CODE FALSO
-    const fakeMemName2 = generateIlName()
-    const fakeData2 = Array.from({length: Math.floor(Math.random() * 30) + 10}, () => heavyMath(Math.floor(Math.random() * 255)))
-    vmCore += `local ${fakeMemName2}={${fakeData2.join(',')}} `
-  })
-
-  // Solo se reconstruyen las tablas correctas (memVars) ignorando el junk code matemático
-  vmCore += `local _pool={${memVars.join(',')}} local _pos=0 `
-  vmCore += `for i=1,#_pool do local _m=_pool[i] `
-  vmCore += `for ${PTR}=1,#_m do `
-  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(_m[${PTR}], ${KEY}+(_pos*2)))) `
-  vmCore += `_pos=_pos+1 end end `
+  let poolVars = [];
+  let realOrder = [];
   
-  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+  // 2. Preparar empaquetado: Mezclar reales con fakes (Math Code basura)
+  let totalChunks = realChunks.length * 3; 
+  let currentReal = 0;
+
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = generateIlName();
+    poolVars.push(memName);
+    
+    // Decidir si este bloque será real o basura
+    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      // BLOQUE REAL ENCRIPTADO
+      realOrder.push(i + 1); // Guardar posición en la que quedó
+      let chunk = realChunks[currentReal];
+      let encryptedBytes = [];
+      for(let j = 0; j < chunk.length; j++) {
+        encryptedBytes.push(heavyMath(chunk.charCodeAt(j) ^ seed));
+      }
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      currentReal++;
+    } else {
+      // 3. BLOQUE BASURA FAKE MATH (Engaña a deobfuscators)
+      let fakeBytes = [];
+      let fakeLen = Math.floor(Math.random() * 20) + 5;
+      for(let j = 0; j < fakeLen; j++) {
+        fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)));
+      }
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
+    }
+  }
+
+  // 4. Empaquetar todo en el pool
+  vmCore += `local _pool={${poolVars.join(',')}} `;
+  
+  // 5. Crear el mapa de reconstrucción de la VM
+  vmCore += `local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
+
+  // 6. Reconstrucción en runtime (Solo procesa los bloques reales, los falsos se quedan inútiles)
+  const idxVar = generateIlName();
+  const byteVar = generateIlName();
+  vmCore += `for _, ${idxVar} in ipairs(${ORDER}) do `;
+  vmCore += `for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, ${KEY}))) `;
+  vmCore += `end end `;
+  
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
   
   const ASSERT = `getfenv()[${runtimeString("assert")}]`;
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
@@ -229,4 +249,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
-      
+                                                                      
