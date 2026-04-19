@@ -79,23 +79,17 @@ function applyCFF(blocks) {
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
   const KEY = generateIlName()
-  
   const bytes = payloadStr.split('').map(c => c.charCodeAt(0))
   const seed = Math.floor(Math.random() * 150) + 50
-  
   const encryptedBytes = bytes.map((b, i) => b ^ (seed + i * 2))
 
   let vmCore = `local ${STACK}={${encryptedBytes.map(b => heavyMath(b)).join(',')}} `
   vmCore += `local ${KEY}=${heavyMath(seed)} `
   vmCore += `local _res="" for i=1,#${STACK} do _res=_res..string.char(bit32.bxor(${STACK}[i], ${KEY}+((i-1)*2))) end `
   
-  // ANTI-TAMPER EXTRA: Proteccion de metatabla global y hooks de funciones core
-  vmCore += `local _sm = setmetatable; if _sm({},{__index=function() return 1 end}).x ~= 1 or tostring(_sm):find("C") == nil then while true do end end `
-  vmCore += `if rawget(_G, "print") ~= print or type(rawget(_G, "loadstring")) ~= "function" then while true do end end `
-
-  vmCore += `local _ls = loadstring; if tostring(_ls) ~= "function: builtin#loadstring" and tostring(_ls) ~= "function" then while true do end end `
-  
-  vmCore += `local _f, _err = _ls(_res); if _f then _f() else warn(_err) end _res=nil `
+  // ANTI-TAMPER ESTABLE (Sin Crash)
+  vmCore += `if not print or type(loadstring) ~= "function" then return end `
+  vmCore += `local _ls = loadstring; local _f, _err = _ls(_res); if _f then _f() end _res=nil `
   
   return vmCore
 }
@@ -112,9 +106,9 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(10)} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(2)} return nil end `
     }
   }
   out += `local ${DISPATCH}={`
@@ -132,49 +126,37 @@ function buildTripleVM(payloadStr) {
   const innerVM = buildDoubleVM(payloadStr);
   const handlers = pickHandlers(8); 
   const realHandler = handlers[Math.floor(Math.random() * handlers.length)];
-  
-  let vm = `local lM = { r = {}, i = {}, p = 1, lM = "lM" }; local lM=lM; `;
-  
+  let vm = `local lM = { r = {}, i = {}, p = 1 }; local lM=lM; `;
   vm += `lM.i = { `;
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 12; i++) {
     const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
     vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
   }
   vm += `{ OP = "${realHandler}", A = "EXEC", B = "lM" }, `;
-  for (let i = 0; i < 5; i++) {
-    const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
-    vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
-  }
   vm += `}; `;
-
   handlers.forEach(h => {
     if (h === realHandler) {
       vm += `local ${h} = function(lM) local lM=lM; if lM.i[lM.p].A == "EXEC" then ${innerVM} end lM.p = lM.p + 1; return lM; end `;
     } else {
-      vm += `local ${h} = function(lM) local lM=lM; lM.r[lM.i[lM.p].A] = lM.i[lM.p].B; lM.p = lM.p + 1; return lM; end `;
+      vm += `local ${h} = function(lM) local lM=lM; lM.p = lM.p + 1; return lM; end `;
     }
   });
-
   vm += `while lM.p <= #lM.i do local curOP = lM.i[lM.p].OP; `;
   handlers.forEach((h, idx) => {
     if (idx === 0) vm += `if curOP == "${h}" then lM = ${h}(lM); `;
     else vm += `elseif curOP == "${h}" then lM = ${h}(lM); `;
   });
   vm += `end end `;
-
   return vm;
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
-  
   let payloadToProtect = detectAndApplyMappings(sourceCode);
   const finalVM = buildTripleVM(payloadToProtect)
-  
-  const result = `${HEADER} ${generateJunk(50)} ${finalVM}`
-  
+  const result = `${HEADER} ${generateJunk(20)} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
-    
+       
