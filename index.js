@@ -15,7 +15,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 const command = new SlashCommandBuilder()
   .setName('obf')
-  .setDescription('Protect your code with MIMOSA VM v4.5')
+  .setDescription('Protect your code with vvmer obfuscator') // <--- Cambiado aquí
   .addStringOption(o => o.setName('code').setDescription('Paste your Lua code directly').setRequired(false))
   .addAttachmentOption(o => o.setName('file').setDescription('Upload a .lua file to obfuscate').setRequired(false));
 
@@ -73,3 +73,4 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.login(TOKEN);
+  
