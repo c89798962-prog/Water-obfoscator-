@@ -1,4 +1,5 @@
 const DISCORD = "https://discord.gg/UttE8VYAY"
+
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
@@ -19,21 +20,21 @@ function pickHandlers(count) {
   return result
 }
 
-// AUMENTADO +25% DE COMPLEJIDAD MATEMÁTICA
 function heavyMath(n) {
-  let a = Math.floor(Math.random() * 4000) + 800
-  let b = Math.floor(Math.random() * 60) + 3
-  let c = Math.floor(Math.random() * 900) + 15
-  let d = Math.floor(Math.random() * 25) + 2
-  let e = Math.floor(Math.random() * 15) + 2 // Factor extra
-  return `(((((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})*${e})/${e})`
+  let a = Math.floor(Math.random() * 3000) + 500
+  let b = Math.floor(Math.random() * 50) + 2
+  let c = Math.floor(Math.random() * 800) + 10
+  let d = Math.floor(Math.random() * 20) + 2
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
+// TÉCNICA MIMOSA: Mixed Boolean Arithmetic (MBA)
 function mba() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 75) + 20, b = Math.floor(Math.random() * 45) + 10;
-  return `(((${n}*${a}-${a})/(${b}+1)+${n})*(${heavyMath(1)}/${heavyMath(1)}))`;
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
+// TÉCNICA MIMOSA: API Mapping para protección de Hubs
 const MAPEO = {
   "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
   "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
@@ -67,16 +68,6 @@ function generateJunk(lines = 100) {
   return j
 }
 
-// 3 ANTI TAMPERS Y 1 ANTI DEBUG FRAGIL (Integrados para no romper el flujo)
-function getSecurityShield() {
-    return `
-    local _c1 = function() if tostring(loadstring) ~= "function" or tostring(print) ~= "function" then while true do end end end; _c1();
-    local _c2 = function() if getmetatable(game) and getmetatable(game).__index then while true do end end end; _c2();
-    local _c3 = function() pcall(function() if script and script.Source then script.Source = "" end end) end; _c3();
-    local _d1 = os.clock(); task.wait(0.01); if os.clock() - _d1 > 0.6 then while true do end end;
-    `
-}
-
 function applyCFF(blocks) {
   const stateVar = generateIlName()
   let lua = `local ${stateVar}=${heavyMath(1)} while true do `
@@ -88,39 +79,45 @@ function applyCFF(blocks) {
   return lua
 }
 
-// VM OP-CODE RESISTENTE (La que pediste de OP=...)
-function buildOpVM(payloadStr) {
-    const STACK = generateIlName();
-    const INST = generateIlName();
-    const bytes = payloadStr.split('').map(c => c.charCodeAt(0));
-    let instructions = bytes.map(b => `{OP="PSH", A=${heavyMath(b)}}`).join(",");
-    
-    return `
-    local ${STACK} = {}
-    local ${INST} = {${instructions}, {OP="EXE"}}
-    for _, i in ipairs(${INST}) do
-        if i.OP == "PSH" then table.insert(${STACK}, string.char(i.A))
-        elseif i.OP == "EXE" then 
-            ${getSecurityShield()}
-            local _res = table.concat(${STACK}); 
-            local _f = loadstring(_res); if _f then _f() end
-        end
-    end`
-}
-
+// TÉCNICA MIMOSA: URL dividida, envuelta y cifrada con XOR dinámico (llave mutante)
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
+  const PTR = generateIlName()
   const KEY = generateIlName()
-  const bytes = payloadStr.split('').map(c => c.charCodeAt(0))
+  
+  const p = Math.ceil(payloadStr.length / 4)
+  const chunks = [payloadStr.slice(0, p), payloadStr.slice(p, p*2), payloadStr.slice(p*2, p*3), payloadStr.slice(p*3)].filter(s => s.length > 0)
+  
   const seed = Math.floor(Math.random() * 150) + 50
-  const encryptedBytes = bytes.map((b, i) => b ^ (seed + i * 2))
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+  let memVars = []
+  let globalPos = 0
 
-  let vmCore = `local ${STACK}={${encryptedBytes.map(b => heavyMath(b)).join(',')}} `
-  vmCore += `local ${KEY}=${heavyMath(seed)} `
-  vmCore += `local _res="" for i=1,#${STACK} do _res=_res..string.char(bit32.bxor(${STACK}[i], ${KEY}+((i-1)*2))) end `
-  vmCore += `if not print or type(loadstring) ~= "function" then return end `
-  // Aquí inyectamos la VM de OpCodes dentro de la TrueVM
-  vmCore += `local _ls = loadstring; local _f = _ls(_res); if _f then _f() end `
+  chunks.forEach((chunk) => {
+    const memName = generateIlName()
+    memVars.push(memName)
+    const encrypted = chunk.split('').map(c => {
+      let b = c.charCodeAt(0) ^ (seed + globalPos * 2)
+      globalPos++
+      return b
+    })
+    vmCore += `local ${memName}={${encrypted.map(b => heavyMath(b)).join(',')}} `
+  })
+
+  vmCore += `local _pool={${memVars.join(',')}} local _pos=0 `
+  vmCore += `for i=1,#_pool do local _m=_pool[i] `
+  vmCore += `for ${PTR}=1,#_m do `
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(_m[${PTR}], ${KEY}+(_pos*2)))) `
+  vmCore += `_pos=_pos+1 end end `
+  
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+  
+  if (payloadStr.includes("http")) {
+    vmCore += `assert(loadstring(game:HttpGet(_e)))() `
+  } else {
+    vmCore += `assert(loadstring(_e))() `
+  }
+  
   return vmCore
 }
 
@@ -136,9 +133,10 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `
+      // TÉCNICA MIMOSA: Variable Shadowing "local lM=lM"
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(10)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(2)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} return nil end `
     }
   }
   out += `local ${DISPATCH}={`
@@ -152,40 +150,70 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
+// NUEVA CAPA AÑADIDA: Máquina Virtual Triple basada en Registros con Handlers y repetición masiva de lM
 function buildTripleVM(payloadStr) {
   const innerVM = buildDoubleVM(payloadStr);
   const handlers = pickHandlers(8); 
   const realHandler = handlers[Math.floor(Math.random() * handlers.length)];
-  let vm = `local lM = { r = {}, i = {}, p = 1 }; local lM=lM; `;
+  
+  let vm = `local lM = { r = {}, i = {}, p = 1, lM = "lM" }; local lM=lM; `;
+  
+  // Fake instruction set
   vm += `lM.i = { `;
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 15; i++) {
     const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
     vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
   }
+  // The real payload trigger
   vm += `{ OP = "${realHandler}", A = "EXEC", B = "lM" }, `;
+  // More fake instructions
+  for (let i = 0; i < 5; i++) {
+    const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
+    vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
+  }
   vm += `}; `;
+
+  // Building handlers with lM spam
   handlers.forEach(h => {
     if (h === realHandler) {
       vm += `local ${h} = function(lM) local lM=lM; if lM.i[lM.p].A == "EXEC" then ${innerVM} end lM.p = lM.p + 1; return lM; end `;
     } else {
-      vm += `local ${h} = function(lM) local lM=lM; lM.p = lM.p + 1; return lM; end `;
+      vm += `local ${h} = function(lM) local lM=lM; lM.r[lM.i[lM.p].A] = lM.i[lM.p].B; lM.p = lM.p + 1; return lM; end `;
     }
   });
+
+  // Fetch-Decode-Execute Loop running through Handlers
   vm += `while lM.p <= #lM.i do local curOP = lM.i[lM.p].OP; `;
   handlers.forEach((h, idx) => {
     if (idx === 0) vm += `if curOP == "${h}" then lM = ${h}(lM); `;
     else vm += `elseif curOP == "${h}" then lM = ${h}(lM); `;
   });
   vm += `end end `;
+
   return vm;
+}
+
+// NUEVO: Generador de Anti-Debugs y Anti-Tampers (Se inyecta en Lua)
+function getExtraProtections() {
+  const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end if debug and debug.traceback then local _tr=debug.traceback() if string.find(string.lower(_tr),"hook") then while true do end end end local _s,_e=pcall(function() error("!AD") end) if not string.find(tostring(_e),"!AD") then while true do end end if getmetatable(_G) then while true do end end if type(require)=="function" and not pcall(function() return require end) then while true do end end if type(debug)=="table" and debug.getinfo then local _i=debug.getinfo(1,"S") if _i and _i.what~="Lua" and _i.what~="main" and _i.what~="C" then while true do end end end `;
+  const antiTampers = `if math.pi<3.14 or math.pi>3.15 then while true do end end if bit32 and bit32.bxor(10,5)~=15 then while true do end end if type(tostring)~="function" then while true do end end if not string.match("chk","^c.*k$") then while true do end end if type(coroutine.create)~="function" then while true do end end if type(table.concat)~="function" then while true do end end local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then while true do end end if math.abs(-10)~=10 then while true do end end if gcinfo and gcinfo()<0 then while true do end end if type(next)~="function" then while true do end end if string.len("a")~=1 then while true do end end if type(table.insert)~="function" then while true do end end `;
+  return antiDebugs + antiTampers;
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
-  // Aplicamos la VM de OpCodes al inicio
-  let payloadProtected = buildOpVM(detectAndApplyMappings(sourceCode));
-  const finalVM = buildTripleVM(payloadProtected)
-  const result = `${HEADER} ${generateJunk(20)} ${finalVM}`
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
+  const extraProtections = getExtraProtections()
+  let payloadToProtect = ""
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
+  const match = sourceCode.match(isLoadstringRegex)
+  if (match) {
+    payloadToProtect = match[1]
+  } else {
+    payloadToProtect = detectAndApplyMappings(sourceCode)
+  }
+  const finalVM = buildTripleVM(payloadToProtect)
+  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
