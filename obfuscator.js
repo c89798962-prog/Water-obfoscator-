@@ -65,6 +65,26 @@ function generateJunk(lines = 100) {
   return j
 }
 
+// NUEVA FUNCIÓN: Anti-Debuggers ligeros y de tiempo
+function getAntiDebug() {
+  const T_NAME = generateIlName();
+  const START_T = generateIlName();
+  return `
+    local ${START_T} = os.clock()
+    -- Anti-Debugger 7.2s
+    task.wait(0.1) 
+    if os.clock() - ${START_T} > 7.2 then while true do end end
+    
+    -- 5 Light Anti-Debuggers
+    if (not game or not workspace) then return end
+    if (tostring(getfenv) ~= "function") then return end
+    if (rawget(getgenv(), "identifyexecutor")) then local check = {pcall(function() return game.JobId end)} end
+    if (coroutine.status(coroutine.running()) ~= "running") then return end
+    local debug_check = pcall(function() return #game:GetChildren() > 0 end)
+    if not debug_check then return end
+  `;
+}
+
 function applyCFF(blocks) {
   const stateVar = generateIlName()
   let lua = `local ${stateVar}=${heavyMath(1)} while true do `
@@ -85,6 +105,10 @@ function buildTrueVM(payloadStr) {
 
   let vmCore = `local ${STACK}={${encryptedBytes.map(b => heavyMath(b)).join(',')}} `
   vmCore += `local ${KEY}=${heavyMath(seed)} `
+  
+  // Inyección de Anti-Debug antes de procesar el stack
+  vmCore += getAntiDebug();
+
   vmCore += `local _res="" for i=1,#${STACK} do _res=_res..string.char(bit32.bxor(${STACK}[i], ${KEY}+((i-1)*2))) end `
   
   // ANTI-TAMPER ESTABLE (Sin Crash)
