@@ -1,4 +1,4 @@
-const HEADER = `--[[ this code it's protected by vvmer obfoscator:https://discord.gg/TRfkb3wvy ]]`
+const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
@@ -133,19 +133,21 @@ function buildSingleVM(innerCode, handlerCount) {
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
   for (let i = 0; i < 17; i++) {
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 4) + 4);
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
   }
   return vm;
 }
 
 function getExtraProtections() {
+  // 5 Anti-Debuggers ultra frágiles con margen de 5 segundos
   const antiDebuggers =
-    `local _adT=os.clock() for _=1,1 do end if os.clock()-_adT>0.00001 then while true do end end ` +
-    `if debug~=nil then while true do end end ` +
-    `local _adOk,_adE=pcall(function() error("__vvmer__") end) if not _adOk and not string.find(tostring(_adE),"__vvmer__",1,true) then while true do end end ` +
-    `if rawget~=nil and getmetatable(_G)~=nil then while true do end end ` +
+    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
+    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
+    `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end ` +
+    `if getmetatable(_G)~=nil then while true do end end ` +
     `if type(print)~="function" then while true do end end `;
 
+  // 12 Anti-Tampers
   const antiTampers =
     `if math.pi<3.14 or math.pi>3.15 then while true do end end ` +
     `if bit32 and bit32.bxor(10,5)~=15 then while true do end end ` +
@@ -165,10 +167,10 @@ function getExtraProtections() {
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
   const extraProtections = getExtraProtections()
   let payloadToProtect = ""
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\(\s*\)/i
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
   if (match) { payloadToProtect = match[1] } 
   else { payloadToProtect = detectAndApplyMappings(sourceCode) }
@@ -179,4 +181,3 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
-      
