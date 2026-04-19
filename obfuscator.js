@@ -1,5 +1,4 @@
- DISCORD = "https://discord.gg/UttE8VYAY"
-
+const DISCORD = "https://discord.gg/UttE8VYAY"
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
@@ -28,13 +27,11 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
-// TÉCNICA MIMOSA: Mixed Boolean Arithmetic (MBA)
 function mba() {
   let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// TÉCNICA MIMOSA: API Mapping para protección de Hubs
 const MAPEO = {
   "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
   "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
@@ -79,44 +76,26 @@ function applyCFF(blocks) {
   return lua
 }
 
-// TÉCNICA MIMOSA: URL dividida, envuelta y cifrada con XOR dinámico (llave mutante)
+// ELIMINADO HttpGet y loadstring directo para evitar el "print" bypass
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
-  const PTR = generateIlName()
   const KEY = generateIlName()
   
-  const p = Math.ceil(payloadStr.length / 4)
-  const chunks = [payloadStr.slice(0, p), payloadStr.slice(p, p*2), payloadStr.slice(p*2, p*3), payloadStr.slice(p*3)].filter(s => s.length > 0)
-  
+  // Convertimos el código en una tabla de bytes ofuscados (Bytecode custom)
+  const bytes = payloadStr.split('').map(c => c.charCodeAt(0))
   const seed = Math.floor(Math.random() * 150) + 50
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
-  let memVars = []
-  let globalPos = 0
-
-  chunks.forEach((chunk) => {
-    const memName = generateIlName()
-    memVars.push(memName)
-    const encrypted = chunk.split('').map(c => {
-      let b = c.charCodeAt(0) ^ (seed + globalPos * 2)
-      globalPos++
-      return b
-    })
-    vmCore += `local ${memName}={${encrypted.map(b => heavyMath(b)).join(',')}} `
-  })
-
-  vmCore += `local _pool={${memVars.join(',')}} local _pos=0 `
-  vmCore += `for i=1,#_pool do local _m=_pool[i] `
-  vmCore += `for ${PTR}=1,#_m do `
-  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(_m[${PTR}], ${KEY}+(_pos*2)))) `
-  vmCore += `_pos=_pos+1 end end `
   
-  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+  const encryptedBytes = bytes.map((b, i) => b ^ (seed + i * 2))
+
+  let vmCore = `local ${STACK}={${encryptedBytes.map(b => heavyMath(b)).join(',')}} `
+  vmCore += `local ${KEY}=${heavyMath(seed)} `
+  vmCore += `local _res="" for i=1,#${STACK} do _res=_res..string.char(bit32.bxor(${STACK}[i], ${KEY}+((i-1)*2))) end `
   
-  if (payloadStr.includes("http")) {
-    vmCore += `assert(loadstring(game:HttpGet(_e)))() `
-  } else {
-    vmCore += `assert(loadstring(_e))() `
-  }
+  // Anti-Print Bypass: Verificamos si loadstring ha sido manipulado
+  vmCore += `local _ls = loadstring; if tostring(_ls) ~= "function: builtin#loadstring" and tostring(_ls) ~= "function" then while true do end end `
+  
+  // Ejecución final (Aquí es donde ocurre la magia, pero ahora con protecciones)
+  vmCore += `local _f, _err = _ls(_res); if _f then _f() else warn(_err) end _res=nil `
   
   return vmCore
 }
@@ -133,7 +112,6 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      // TÉCNICA MIMOSA: Variable Shadowing "local lM=lM"
       out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(10)} ${innerCode} end `
     } else {
       out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} return nil end `
@@ -150,7 +128,6 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-// NUEVA CAPA AÑADIDA: Máquina Virtual Triple basada en Registros con Handlers y repetición masiva de lM
 function buildTripleVM(payloadStr) {
   const innerVM = buildDoubleVM(payloadStr);
   const handlers = pickHandlers(8); 
@@ -158,22 +135,18 @@ function buildTripleVM(payloadStr) {
   
   let vm = `local lM = { r = {}, i = {}, p = 1, lM = "lM" }; local lM=lM; `;
   
-  // Fake instruction set
   vm += `lM.i = { `;
   for (let i = 0; i < 15; i++) {
     const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
     vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
   }
-  // The real payload trigger
   vm += `{ OP = "${realHandler}", A = "EXEC", B = "lM" }, `;
-  // More fake instructions
   for (let i = 0; i < 5; i++) {
     const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
     vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
   }
   vm += `}; `;
 
-  // Building handlers with lM spam
   handlers.forEach(h => {
     if (h === realHandler) {
       vm += `local ${h} = function(lM) local lM=lM; if lM.i[lM.p].A == "EXEC" then ${innerVM} end lM.p = lM.p + 1; return lM; end `;
@@ -182,7 +155,6 @@ function buildTripleVM(payloadStr) {
     }
   });
 
-  // Fetch-Decode-Execute Loop running through Handlers
   vm += `while lM.p <= #lM.i do local curOP = lM.i[lM.p].OP; `;
   handlers.forEach((h, idx) => {
     if (idx === 0) vm += `if curOP == "${h}" then lM = ${h}(lM); `;
@@ -193,28 +165,29 @@ function buildTripleVM(payloadStr) {
   return vm;
 }
 
-// NUEVO: Generador de Anti-Debugs y Anti-Tampers (Se inyecta en Lua)
 function getExtraProtections() {
-  const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end if debug and debug.traceback then local _tr=debug.traceback() if string.find(string.lower(_tr),"hook") then while true do end end end local _s,_e=pcall(function() error("!AD") end) if not string.find(tostring(_e),"!AD") then while true do end end if getmetatable(_G) then while true do end end if type(require)=="function" and not pcall(function() return require end) then while true do end end if type(debug)=="table" and debug.getinfo then local _i=debug.getinfo(1,"S") if _i and _i.what~="Lua" and _i.what~="main" and _i.what~="C" then while true do end end end `;
-  const antiTampers = `if math.pi<3.14 or math.pi>3.15 then while true do end end if bit32 and bit32.bxor(10,5)~=15 then while true do end end if type(tostring)~="function" then while true do end end if not string.match("chk","^c.*k$") then while true do end end if type(coroutine.create)~="function" then while true do end end if type(table.concat)~="function" then while true do end end local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then while true do end end if math.abs(-10)~=10 then while true do end end if gcinfo and gcinfo()<0 then while true do end end if type(next)~="function" then while true do end end if string.len("a")~=1 then while true do end end if type(table.insert)~="function" then while true do end end `;
-  return antiDebugs + antiTampers;
+  // Inyectamos chequeos constantes de funciones core de Lua
+  const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end if debug and debug.traceback then local _tr=debug.traceback() if string.find(string.lower(_tr),"hook") then while true do end end end local _s,_e=pcall(function() error("!AD") end) if not string.find(tostring(_e),"!AD") then while true do end end if getmetatable(_G) then while true do end end if type(require)=="function" and not pcall(function() return require end) then while true do end end `;
+  return antiDebugs;
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
+  
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
   const extraProtections = getExtraProtections()
-  let payloadToProtect = ""
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = sourceCode.match(isLoadstringRegex)
-  if (match) {
-    payloadToProtect = match[1]
-  } else {
-    payloadToProtect = detectAndApplyMappings(sourceCode)
-  }
+  
+  // Procesar el código antes de meterlo a la VM
+  let payloadToProtect = detectAndApplyMappings(sourceCode);
+  
+  // Generar la VM Triple con el código ya pre-ofuscado
   const finalVM = buildTripleVM(payloadToProtect)
+  
   const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
+  
+  // Minificación final agresiva para que no se entienda nada visualmente
   return result.replace(/\s+/g, " ").trim()
 }
 
-module.exports = { obfuscate }  
+module.exports = { obfuscate }
+                          
