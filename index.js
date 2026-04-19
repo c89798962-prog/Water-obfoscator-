@@ -63,7 +63,10 @@ client.on('interactionCreate', async interaction => {
     if (buf.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
 
     await interaction.editReply({
-      content: 'Your code is now protected, copy and paste.',
+      content: 'Your code is now protected, copy and paste
+don't scary if the file its big it's will executable
+We recommend obfoscate a loadingstring  code⚠️ why we don't sopport Scripts of more than 300-400 lines
+Use it and look the rules properly ',
       files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })]
     });
   } catch (e) {
