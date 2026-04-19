@@ -15,22 +15,30 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 const command = new SlashCommandBuilder()
   .setName('obf')
-  .setDescription('Protect your code with vvmer obfuscator') // <--- Cambiado aquí
+  .setDescription('Protect your code with vvmer obfuscator')
   .addStringOption(o => o.setName('code').setDescription('Paste your Lua code directly').setRequired(false))
   .addAttachmentOption(o => o.setName('file').setDescription('Upload a .lua file to obfuscate').setRequired(false));
 
 function fetchURL(url) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith('https') ? https : http;
-    mod.get(url, res => { let d = ''; res.on('data', c => d += c); res.on('end', () => resolve(d)); }).on('error', reject);
+    mod.get(url, res => { 
+      let d = ''; 
+      res.on('data', c => d += c); 
+      res.on('end', () => resolve(d)); 
+    }).on('error', reject);
   });
 }
 
 client.once('ready', async () => {
   console.log(`Online as ${client.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(client.user.id), { body: [command.toJSON()] });
-  console.log('Slash command /obf registered.');
+  try {
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [command.toJSON()] });
+    console.log('Slash command /obf registered.');
+  } catch (error) {
+    console.error('Error registering commands:', error);
+  }
 });
 
 client.on('interactionCreate', async interaction => {
@@ -39,7 +47,9 @@ client.on('interactionCreate', async interaction => {
   const codeOption = interaction.options.getString('code');
   const fileOption = interaction.options.getAttachment('file');
 
-  if (!codeOption && !fileOption) return interaction.reply({ content: 'Provide `code` or a `file`.', ephemeral: true });
+  if (!codeOption && !fileOption) {
+    return interaction.reply({ content: 'Provide `code` or a `file`.', ephemeral: true });
+  }
 
   await interaction.deferReply();
 
@@ -59,14 +69,17 @@ client.on('interactionCreate', async interaction => {
       console.error('Failed to DM owner:', dmErr);
     }
 
-    const buf = Buffer.from(obfuscate(src), 'utf-8');
+    const obfuscatedCode = obfuscate(src);
+    const buf = Buffer.from(obfuscatedCode, 'utf-8');
+    
     if (buf.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
 
+    // Usamos backticks ( ` ) para permitir saltos de línea y comillas simples internas
     await interaction.editReply({
-      content: 'Your code is now protected, copy and paste
-don't scary if the file its big it's will executable
-We recommend obfoscate a loadingstring  code⚠️ why we don't sopport Scripts of more than 300-400 lines
-Use it and look the rules properly ',
+      content: `Your code is now protected, copy and paste.
+Don't be scared if the file is big, it will be executable.
+We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines.
+Use it and follow the rules properly.`,
       files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })]
     });
   } catch (e) {
@@ -76,3 +89,4 @@ Use it and look the rules properly ',
 });
 
 client.login(TOKEN);
+      
