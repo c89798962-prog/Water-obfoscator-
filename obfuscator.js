@@ -249,4 +249,3 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
-                                                                      
