@@ -77,12 +77,11 @@ function applyCFF(blocks) {
   return lua
 }
 
-// NUEVO: Reconstrucción de strings en runtime para ocultar llamadas críticas
 function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// TÉCNICA MIMOSA: URL dividida, envuelta y cifrada con XOR dinámico (llave mutante)
+// TÉCNICA MIMOSA MEJORADA: Dividida, encriptada, empaquetada y mezclada con Fake Junk Math
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
   const PTR = generateIlName()
@@ -97,16 +96,28 @@ function buildTrueVM(payloadStr) {
   let globalPos = 0
 
   chunks.forEach((chunk) => {
+    // 1. INYECTAR JUNK CODE FALSO (Misma estructura matemática, pero no hace nada)
+    const fakeMemName = generateIlName()
+    const fakeData = Array.from({length: Math.floor(Math.random() * 40) + 15}, () => heavyMath(Math.floor(Math.random() * 255)))
+    vmCore += `local ${fakeMemName}={${fakeData.join(',')}} `
+
+    // 2. EMPAQUETADO Y ENCRIPTADO REAL
     const memName = generateIlName()
-    memVars.push(memName)
+    memVars.push(memName) // Solo guardamos el real para el pool
     const encrypted = chunk.split('').map(c => {
       let b = c.charCodeAt(0) ^ (seed + globalPos * 2)
       globalPos++
       return b
     })
     vmCore += `local ${memName}={${encrypted.map(b => heavyMath(b)).join(',')}} `
+
+    // 3. OTRA CAPA DE JUNK CODE FALSO
+    const fakeMemName2 = generateIlName()
+    const fakeData2 = Array.from({length: Math.floor(Math.random() * 30) + 10}, () => heavyMath(Math.floor(Math.random() * 255)))
+    vmCore += `local ${fakeMemName2}={${fakeData2.join(',')}} `
   })
 
+  // Solo se reconstruyen las tablas correctas (memVars) ignorando el junk code matemático
   vmCore += `local _pool={${memVars.join(',')}} local _pos=0 `
   vmCore += `for i=1,#_pool do local _m=_pool[i] `
   vmCore += `for ${PTR}=1,#_m do `
@@ -115,7 +126,6 @@ function buildTrueVM(payloadStr) {
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
   
-  // Aplicando desensamblado de loadstring y dependencias
   const ASSERT = `getfenv()[${runtimeString("assert")}]`;
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
   const GAME = `getfenv()[${runtimeString("game")}]`;
@@ -142,7 +152,6 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      // TÉCNICA MIMOSA: Variable Shadowing "local lM=lM"
       out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(10)} ${innerCode} end `
     } else {
       out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} return nil end `
@@ -159,7 +168,6 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-// NUEVA CAPA AÑADIDA: Máquina Virtual Triple basada en Registros con Handlers y repetición masiva de lM
 function buildTripleVM(payloadStr) {
   const innerVM = buildDoubleVM(payloadStr);
   const handlers = pickHandlers(8); 
@@ -167,22 +175,18 @@ function buildTripleVM(payloadStr) {
   
   let vm = `local lM = { r = {}, i = {}, p = 1, lM = "lM" }; local lM=lM; `;
   
-  // Fake instruction set
   vm += `lM.i = { `;
   for (let i = 0; i < 15; i++) {
     const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
     vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
   }
-  // The real payload trigger
   vm += `{ OP = "${realHandler}", A = "EXEC", B = "lM" }, `;
-  // More fake instructions
   for (let i = 0; i < 5; i++) {
     const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
     vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
   }
   vm += `}; `;
 
-  // Building handlers with lM spam
   handlers.forEach(h => {
     if (h === realHandler) {
       vm += `local ${h} = function(lM) local lM=lM; if lM.i[lM.p].A == "EXEC" then ${innerVM} end lM.p = lM.p + 1; return lM; end `;
@@ -191,7 +195,6 @@ function buildTripleVM(payloadStr) {
     }
   });
 
-  // Fetch-Decode-Execute Loop running through Handlers
   vm += `while lM.p <= #lM.i do local curOP = lM.i[lM.p].OP; `;
   handlers.forEach((h, idx) => {
     if (idx === 0) vm += `if curOP == "${h}" then lM = ${h}(lM); `;
@@ -202,7 +205,6 @@ function buildTripleVM(payloadStr) {
   return vm;
 }
 
-// NUEVO: Generador de Anti-Debugs y Anti-Tampers (Se inyecta en Lua)
 function getExtraProtections() {
   const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end if debug and debug.traceback then local _tr=debug.traceback() if string.find(string.lower(_tr),"hook") then while true do end end end local _s,_e=pcall(function() error("!AD") end) if not string.find(tostring(_e),"!AD") then while true do end end if getmetatable(_G) then while true do end end if type(require)=="function" and not pcall(function() return require end) then while true do end end if type(debug)=="table" and debug.getinfo then local _i=debug.getinfo(1,"S") if _i and _i.what~="Lua" and _i.what~="main" and _i.what~="C" then while true do end end end `;
   const antiTampers = `if math.pi<3.14 or math.pi>3.15 then while true do end end if bit32 and bit32.bxor(10,5)~=15 then while true do end end if type(tostring)~="function" then while true do end end if not string.match("chk","^c.*k$") then while true do end end if type(coroutine.create)~="function" then while true do end end if type(table.concat)~="function" then while true do end end local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then while true do end end if math.abs(-10)~=10 then while true do end end if gcinfo and gcinfo()<0 then while true do end end if type(next)~="function" then while true do end end if string.len("a")~=1 then while true do end end if type(table.insert)~="function" then while true do end end `;
@@ -227,4 +229,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
-    
+      
