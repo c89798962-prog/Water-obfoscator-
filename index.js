@@ -77,9 +77,11 @@ client.on('interactionCreate', async interaction => {
     // Usamos backticks ( ` ) para permitir saltos de línea y comillas simples internas
     await interaction.editReply({
       content: `Your code is now protected, copy and paste.
-Don't be scared if the file is big, it will be executable.
-We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines.
-Use it and follow the rules properly.`,
+•Don't be scared if the file is big, it will be executable
+
+•We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines
+
+•Use it and follow the rules properly.`,
       files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })]
     });
   } catch (e) {
