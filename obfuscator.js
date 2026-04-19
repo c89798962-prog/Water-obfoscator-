@@ -76,12 +76,10 @@ function applyCFF(blocks) {
   return lua
 }
 
-// ELIMINADO HttpGet y loadstring directo para evitar el "print" bypass
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
   const KEY = generateIlName()
   
-  // Convertimos el código en una tabla de bytes ofuscados (Bytecode custom)
   const bytes = payloadStr.split('').map(c => c.charCodeAt(0))
   const seed = Math.floor(Math.random() * 150) + 50
   
@@ -91,10 +89,12 @@ function buildTrueVM(payloadStr) {
   vmCore += `local ${KEY}=${heavyMath(seed)} `
   vmCore += `local _res="" for i=1,#${STACK} do _res=_res..string.char(bit32.bxor(${STACK}[i], ${KEY}+((i-1)*2))) end `
   
-  // Anti-Print Bypass: Verificamos si loadstring ha sido manipulado
+  // ANTI-TAMPER EXTRA: Proteccion de metatabla global y hooks de funciones core
+  vmCore += `local _sm = setmetatable; if _sm({},{__index=function() return 1 end}).x ~= 1 or tostring(_sm):find("C") == nil then while true do end end `
+  vmCore += `if rawget(_G, "print") ~= print or type(rawget(_G, "loadstring")) ~= "function" then while true do end end `
+
   vmCore += `local _ls = loadstring; if tostring(_ls) ~= "function: builtin#loadstring" and tostring(_ls) ~= "function" then while true do end end `
   
-  // Ejecución final (Aquí es donde ocurre la magia, pero ahora con protecciones)
   vmCore += `local _f, _err = _ls(_res); if _f then _f() else warn(_err) end _res=nil `
   
   return vmCore
@@ -165,29 +165,16 @@ function buildTripleVM(payloadStr) {
   return vm;
 }
 
-function getExtraProtections() {
-  // Inyectamos chequeos constantes de funciones core de Lua
-  const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end if debug and debug.traceback then local _tr=debug.traceback() if string.find(string.lower(_tr),"hook") then while true do end end end local _s,_e=pcall(function() error("!AD") end) if not string.find(tostring(_e),"!AD") then while true do end end if getmetatable(_G) then while true do end end if type(require)=="function" and not pcall(function() return require end) then while true do end end `;
-  return antiDebugs;
-}
-
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
-  const extraProtections = getExtraProtections()
-  
-  // Procesar el código antes de meterlo a la VM
   let payloadToProtect = detectAndApplyMappings(sourceCode);
-  
-  // Generar la VM Triple con el código ya pre-ofuscado
   const finalVM = buildTripleVM(payloadToProtect)
   
-  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
+  const result = `${HEADER} ${generateJunk(50)} ${finalVM}`
   
-  // Minificación final agresiva para que no se entienda nada visualmente
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
-                          
+    
