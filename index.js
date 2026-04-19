@@ -74,9 +74,10 @@ client.on('interactionCreate', async interaction => {
     
     if (buf.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
 
-    // Usamos backticks ( ` ) para permitir saltos de línea y comillas simples internas
+    // Usamos backticks ( ` ) para permitir saltos de línea y comillas simples internasp
     await interaction.editReply({
-      content: `Your code is now protected, copy and paste.
+      content: `Your code is now protected, copy and paste
+      
 •Don't be scared if the file is big, it will be executable
 
 •We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines
