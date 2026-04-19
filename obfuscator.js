@@ -1,4 +1,5 @@
 const DISCORD = "https://discord.gg/UttE8VYAY"
+
 const HEADER = `--[[ this code it's protected by water obfoscator:${DISCORD} ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
@@ -27,9 +28,33 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
+// TÉCNICA MIMOSA: Mixed Boolean Arithmetic (MBA)
+function mba() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+}
+
+// TÉCNICA MIMOSA: API Mapping para protección de Hubs
+const MAPEO = {
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+};
+
 function detectAndApplyMappings(code) {
-  // Mapeo básico para que la función sea funcional sin cambiar tu lógica
-  return code.replace(/game:GetService\("([^"]+)"\)/g, 'game["$1"]');
+  let modified = code, headers = "";
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match) => `game[${replacement}]`);
+    }
+  }
+  return headers + modified;
 }
 
 function generateJunk(lines = 100) {
@@ -54,27 +79,63 @@ function applyCFF(blocks) {
   return lua
 }
 
-function buildTrueVM(payloadBytes) {
+// TÉCNICA MIMOSA: URL dividida, envuelta y cifrada con XOR dinámico (llave mutante)
+function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
-  const MEM = generateIlName()
   const PTR = generateIlName()
+  const KEY = generateIlName()
   
-  // Ocultación total de loadstring mediante bytes matemáticos
-  const ls = "loadstring".split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
+  const p = Math.ceil(payloadStr.length / 4)
+  const chunks = [payloadStr.slice(0, p), payloadStr.slice(p, p*2), payloadStr.slice(p*2, p*3), payloadStr.slice(p*3)].filter(s => s.length > 0)
   
-  let vmCore = `local ${STACK}={} local ${MEM}={${payloadBytes.map(b => heavyMath(b)).join(',')}} `
-  vmCore += `local ${PTR}=${heavyMath(1)} while ${PTR}<=(#${MEM}) do `
-  vmCore += `table.insert(${STACK}, string.char(${MEM}[${PTR}])) ${PTR}=${PTR}+${heavyMath(1)} end `
-  vmCore += `local _e = "" for _,v in pairs(${STACK}) do _e=_e..v end `
+  const seed = Math.floor(Math.random() * 150) + 50
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+  let memVars = []
+  let globalPos = 0
+
+  chunks.forEach((chunk) => {
+    const memName = generateIlName()
+    memVars.push(memName)
+    const encrypted = chunk.split('').map(c => {
+      let b = c.charCodeAt(0) ^ (seed + globalPos * 2)
+      globalPos++
+      return b
+    })
+    vmCore += `local ${memName}={${encrypted.map(b => heavyMath(b)).join(',')}} `
+  })
+
+  vmCore += `local _pool={${memVars.join(',')}} local _pos=0 `
+  vmCore += `for i=1,#_pool do local _m=_pool[i] `
+  vmCore += `for ${PTR}=1,#_m do `
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(_m[${PTR}], ${KEY}+(_pos*2)))) `
+  vmCore += `_pos=_pos+1 end end `
   
-  // Aquí se elimina el rastro de loadstring usando el entorno
-  vmCore += `local _v = getfenv()[string.char(${ls})] assert(_v(_e))() `
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+  
+  // === MÁQUINA VIRTUAL ANTI-HOOK (SOLUCIÓN A LA BURLA) ===
+  // 1. Ocultamos completamente la palabra "loadstring" y "HttpGet"
+  // 2. Usamos getrenv() para esquivar el hook que el cliente usó para imprimir el código
+  const VM = generateIlName()
+  vmCore += `local function ${VM}(_src) `
+  vmCore += `  local _L = string.char(108,111,97,100,115,116,114,105,110,103) ` // "loadstring"
+  vmCore += `  local _E = (type(getrenv)=="function" and getrenv()[_L]) or getfenv()[_L] or _G[_L] `
+  vmCore += `  if type(iscf)=="function" and not iscf(_E) then while true do end end ` // Crash si intentan hookearlo
+  vmCore += `  local _s, _r = pcall(_E, _src) `
+  vmCore += `  if _s and _r then return _r() else while true do end end `
+  vmCore += `end `
+
+  if (payloadStr.includes("http")) {
+    vmCore += `local _H = string.char(72,116,116,112,71,101,116) ` // "HttpGet"
+    vmCore += `${VM}(game[_H](game, _e)) `
+  } else {
+    vmCore += `${VM}(_e) `
+  }
   
   return vmCore
 }
 
-function buildDoubleVM(payloadBytes) {
-  const innerVM = buildTrueVM(payloadBytes)
+function buildDoubleVM(payloadStr) {
+  const innerVM = buildTrueVM(payloadStr)
   return buildSingleVM(innerVM, 7)
 }
 
@@ -85,9 +146,10 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(10)} ${innerCode} end `
+      // TÉCNICA MIMOSA: Variable Shadowing "local lM=lM"
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(10)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} return nil end `
     }
   }
   out += `local ${DISPATCH}={`
@@ -101,41 +163,54 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
+// NUEVA CAPA AÑADIDA: Máquina Virtual Triple basada en Registros con Handlers y repetición masiva de lM
 function buildTripleVM(payloadStr) {
-  const payloadBytes = payloadStr.split('').map(c => c.charCodeAt(0));
-  const innerVM = buildDoubleVM(payloadBytes);
+  const innerVM = buildDoubleVM(payloadStr);
   const handlers = pickHandlers(8); 
   const realHandler = handlers[Math.floor(Math.random() * handlers.length)];
   
-  let vm = `local lM = { r = {}, i = {}, p = 1 }; local lM=lM; `;
+  let vm = `local lM = { r = {}, i = {}, p = 1, lM = "lM" }; local lM=lM; `;
+  
+  // Fake instruction set
   vm += `lM.i = { `;
   for (let i = 0; i < 15; i++) {
-    vm += `{ OP = "${handlers[Math.floor(Math.random() * handlers.length)]}", A = ${heavyMath(i)} }, `;
+    const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
+    vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
   }
-  vm += `{ OP = "${realHandler}", A = "EXEC" }, `;
+  // The real payload trigger
+  vm += `{ OP = "${realHandler}", A = "EXEC", B = "lM" }, `;
+  // More fake instructions
+  for (let i = 0; i < 5; i++) {
+    const fakeH = handlers[Math.floor(Math.random() * handlers.length)];
+    vm += `{ OP = "${fakeH}", A = ${heavyMath(i)}, B = ${heavyMath(i+5)} }, `;
+  }
   vm += `}; `;
 
+  // Building handlers with lM spam
   handlers.forEach(h => {
     if (h === realHandler) {
-      vm += `local ${h} = function(lM) if lM.i[lM.p].A == "EXEC" then ${innerVM} end lM.p = lM.p + 1 return lM end `;
+      vm += `local ${h} = function(lM) local lM=lM; if lM.i[lM.p].A == "EXEC" then ${innerVM} end lM.p = lM.p + 1; return lM; end `;
     } else {
-      vm += `local ${h} = function(lM) lM.p = lM.p + 1 return lM end `;
+      vm += `local ${h} = function(lM) local lM=lM; lM.r[lM.i[lM.p].A] = lM.i[lM.p].B; lM.p = lM.p + 1; return lM; end `;
     }
   });
 
+  // Fetch-Decode-Execute Loop running through Handlers
   vm += `while lM.p <= #lM.i do local curOP = lM.i[lM.p].OP; `;
   handlers.forEach((h, idx) => {
-    if (idx === 0) vm += `if curOP == "${h}" then lM = ${h}(lM) `;
-    else vm += `elseif curOP == "${h}" then lM = ${h}(lM) `;
+    if (idx === 0) vm += `if curOP == "${h}" then lM = ${h}(lM); `;
+    else vm += `elseif curOP == "${h}" then lM = ${h}(lM); `;
   });
   vm += `end end `;
 
   return vm;
 }
 
+// NUEVO: Generador de Anti-Debugs y Anti-Tampers (Se inyecta en Lua)
 function getExtraProtections() {
-  const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end `;
-  return antiDebugs;
+  const antiDebugs = `local _t1=os.clock() for _=1,10000 do local _x=math.sin(_) end if os.clock()-_t1>2 then while true do end end if debug and debug.traceback then local _tr=debug.traceback() if string.find(string.lower(_tr),"hook") then while true do end end end local _s,_e=pcall(function() error("!AD") end) if not string.find(tostring(_e),"!AD") then while true do end end if getmetatable(_G) then while true do end end if type(require)=="function" and not pcall(function() return require end) then while true do end end if type(debug)=="table" and debug.getinfo then local _i=debug.getinfo(1,"S") if _i and _i.what~="Lua" and _i.what~="main" and _i.what~="C" then while true do end end end `;
+  const antiTampers = `if math.pi<3.14 or math.pi>3.15 then while true do end end if bit32 and bit32.bxor(10,5)~=15 then while true do end end if type(tostring)~="function" then while true do end end if not string.match("chk","^c.*k$") then while true do end end if type(coroutine.create)~="function" then while true do end end if type(table.concat)~="function" then while true do end end local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then while true do end end if math.abs(-10)~=10 then while true do end end if gcinfo and gcinfo()<0 then while true do end end if type(next)~="function" then while true do end end if string.len("a")~=1 then while true do end end if type(table.insert)~="function" then while true do end end `;
+  return antiDebugs + antiTampers;
 }
 
 function obfuscate(sourceCode) {
@@ -145,18 +220,14 @@ function obfuscate(sourceCode) {
   let payloadToProtect = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
-  
   if (match) {
-    // Si es una URL de HttpGet, la protegemos sin usar la palabra loadstring
-    payloadToProtect = `game:HttpGet("${match[1]}")`
+    payloadToProtect = match[1]
   } else {
     payloadToProtect = detectAndApplyMappings(sourceCode)
   }
-
   const finalVM = buildTripleVM(payloadToProtect)
   const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
-      
