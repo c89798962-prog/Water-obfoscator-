@@ -1,376 +1,238 @@
-// ╔══════════════════════════════════════════════════════════════╗
-// ║         VVMER OBFUSCATOR - PL CHAOS STYLE                   ║
-// ║  Output: ~32KB | Hex everywhere | VM opcodes | lM spam      ║
-// ╚══════════════════════════════════════════════════════════════╝
-
 const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
 
-// ─── POOLS DE NOMBRES ─────────────────────────────────────────
-
-const IL_POOL = [
-  "IIIIIIII1","vvvvvv1","vvvvvvvv2","vvvvvv3","IIlIlIlI1",
-  "lvlvlvlv2","I1","l1","v1","v2","v3","II","ll","vv","I2"
-]
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
 
-// Nombres largos mixtos estilo PL (letras+números mezclados)
-const PL_NAME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-function plName(len) {
-  // Primer carácter siempre letra
-  let s = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"[ri(0,51)]
-  for (let i = 1; i < len; i++) s += PL_NAME_CHARS[ri(0, PL_NAME_CHARS.length-1)]
-  return s
-}
-
-// Opcodes VM estilo PL (nombres largos con mayúsculas y números)
-const OPCODE_NAMES = [
-  "ZRueljkq","gft2S7RQz9j","GNb35djX","wehVp01gapwv","sCFZXw6oBq",
-  "GKEu6fQLNcVs","zj5c3d9MLuCCjF","Kz58USBhXiEsR","oBt2WLhe0Vu",
-  "cU0rzVS6hTUw","C0uRzdkHfNRIT","tNjW33S","ioiMRd3doMO76e",
-  "XNEZKqQGdH","JOOwEaX","oFtQMxBMfbJ","TFaNAJ","xzub6ZFKCwI"
-]
-
 function generateIlName() {
-  return IL_POOL[ri(0, IL_POOL.length-1)] + ri(0, 99999)
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
 }
+
 function pickHandlers(count) {
-  const used = new Set(), result = []
+  const used = new Set()
+  const result = []
   while (result.length < count) {
-    const name = HANDLER_POOL[ri(0,HANDLER_POOL.length-1)] + ri(0,99)
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
+    const name = base + Math.floor(Math.random() * 99)
     if (!used.has(name)) { used.add(name); result.push(name) }
   }
   return result
 }
 
-// ─── HEX HELPERS ──────────────────────────────────────────────
-
-function ri(a, b) { return Math.floor(Math.random()*(b-a+1))+a }
-
-// Número a hex con formato estilo PL (casing aleatorio, padding aleatorio)
-function hx(n) {
-  const abs = Math.abs(n)
-  const h = abs.toString(16)
-  // Casing mixto aleatorio como PL
-  let mixed = ""
-  for (const c of h) mixed += Math.random()>0.5 ? c.toUpperCase() : c
-  // Padding de ceros aleatorio (0-6 ceros)
-  const pad = "0".repeat(ri(0,4))
-  const prefix = Math.random()>0.5 ? "0X" : "0x"
-  const result = `${prefix}${pad}${mixed}`
-  return n < 0 ? `(-${result})` : result
+function heavyMath(n) {
+  if (Math.random() < 0.8) return n.toString();
+  let a = Math.floor(Math.random() * 3000) + 500
+  let b = Math.floor(Math.random() * 50) + 2
+  let c = Math.floor(Math.random() * 800) + 10
+  let d = Math.floor(Math.random() * 20) + 2
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
-// Hex index para tablas: [0X3F4E]
-function hi() { return `[${hx(ri(0x0001, 0x7FFF))}]` }
-
-// Constante hex grande: 0X3a6F895D
-function hbig() {
-  const n = ri(0x100000, 0xFFFFFFF)
-  const h = n.toString(16)
-  let mixed = ""
-  for (const c of h) mixed += Math.random()>0.5 ? c.toUpperCase() : c
-  const prefix = Math.random()>0.5 ? "0X" : "0x"
-  return `${prefix}${mixed}`
+function mba() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// Hex negativo grande
-function hnbig() {
-  const n = ri(0x100000, 0xFFFFFFF)
-  const h = n.toString(16)
-  let mixed = ""
-  for (const c of h) mixed += Math.random()>0.5 ? c.toUpperCase() : c
-  const prefix = Math.random()>0.5 ? "0X" : "0x"
-  return `(-${prefix}${mixed})`
-}
+const MAPEO = {
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+};
 
-// ─── VM OBJECT ────────────────────────────────────────────────
-// Genera el objeto VM con opcodes estilo PL
-
-function generateVMObject(vmVar) {
-  const ops = OPCODE_NAMES
-  let code = `local ${vmVar}={} `
-  // Constantes (.d table)
-  code += `${vmVar}.d={`
-  for (let i = 1; i <= 11; i++) {
-    code += `[${hx(i)}]=${hx(ri(1,15))},`
+function detectAndApplyMappings(code) {
+  let modified = code, headers = "";
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match) => `game[${replacement}]`);
+    }
   }
-  code += `} `
-  // Opcodes (operaciones matemáticas simples disfrazadas)
-  const opDefs = [
-    `function(a,b) return (b and a+b or a) end`,
-    `function(a,b) return (b and a-b or -a) end`,
-    `function(a,b) return (b and a*b or a*a) end`,
-    `function(a,b) return (b and a/b or a/2) end`,
-    `function(a,b) return (b and a%b or a%7) end`,
-    `function(a,b) return (b and (a>b and a or b) or math.abs(a)) end`,
-    `function(a,b) return (b and (a<b and a or b) or math.abs(a)) end`,
-    `function(a,b) return (b and a^b or math.sqrt(math.abs(a))) end`,
-    `function(a,b) return (b and a+b*2 or a+1) end`,
-    `function(a,b) return (b and a-b*2 or a-1) end`,
-    `function(a,b) return (b and (a+b)*(a-b) or a*a-1) end`,
-    `function(a,b) return (b and math.max(a,b) or math.max(a,0)) end`,
-    `function(a,b) return (b and math.min(a,b) or math.min(a,100)) end`,
-    `function(a,b) return (b and a*b+b or a+2) end`,
-    `function(a,b) return (b and a/b+1 or a+3) end`,
-    `function(a,b) return (b and a%b+a or a%3) end`,
-    `function(a,b) return (b and (a*b)%(b+1) or a%5) end`,
-    `function(a,b) return (b and a+b+1 or a+4) end`,
-  ]
-  for (let i = 0; i < ops.length; i++) {
-    code += `${vmVar}.${ops[i]}=${opDefs[i % opDefs.length]} `
+  return headers + modified;
+}
+
+function generateJunk(lines = 100) {
+  let j = ''
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random()
+    if (r < 0.3) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
+    else if (r < 0.6) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
+    else j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
   }
-  return code
-}
-
-// ─── JUNK ESTILO PL ──────────────────────────────────────────
-// La magia: fake table assignments con opcodes del VM
-
-function plJunkLine(vmVar, vars) {
-  const op = OPCODE_NAMES[ri(0, OPCODE_NAMES.length-1)]
-  const op2 = OPCODE_NAMES[ri(0, OPCODE_NAMES.length-1)]
-  const op3 = OPCODE_NAMES[ri(0, OPCODE_NAMES.length-1)]
-  const v = vars[ri(0, vars.length-1)]
-  const v2 = vars[ri(0, vars.length-1)]
-  const patterns = [
-    // Asignación a tabla con hex index
-    `(${v})${hi()}=${hbig()}+(${vmVar}.${op}((${vmVar}.${op2}((${vmVar}.d[${hx(ri(1,10))}]),(${vmVar}.d[${hx(ri(1,10))}])),(${vmVar}.d[${hx(ri(1,10))}]>=(-${hbig()}) and ${vmVar}.d[${hx(ri(1,10))}] or ${hbig()})));`,
-    // Reasignación con ternario hex
-    `${v}=${hbig()}+(((${vmVar}.${op}((${v2}${hi()}),(${vmVar}.d[${hx(ri(1,10))}]))<=${vmVar}.${op2}((${hbig()}),(${vmVar}.d[${hx(ri(1,10))}])) and ${vmVar}.d[${hx(ri(1,10))}] or ${hbig()})));`,
-    // Asignación doble
-    `(${v})${hi()}=${hnbig()}+(((${vmVar}.${op}((${vmVar}.${op2}((${vmVar}.d[${hx(ri(1,10))}]))))-${vmVar}.d[${hx(ri(1,10))}])));${v}=${hbig()}+((${vmVar}.${op3}((${v2}${hi()}),(${vmVar}.d[${hx(ri(1,10))}]))));`,
-    // Triple operación
-    `(${v})${hi()}=${hbig()}+((((${vmVar}.${op}((${vmVar}.d[${hx(ri(1,10))}]),(${hbig()}))*${vmVar}.${op2}((${vmVar}.d[${hx(ri(1,10))}]),(${vmVar}.d[${hx(ri(1,10))}])))%(${hbig()}-${hnbig()})));`,
-    // Comparación anidada
-    `(${v2})${hi()}=${hbig()}+(((((${vmVar}.d[${hx(ri(1,10))}]<${vmVar}.${op}((${vmVar}.d[${hx(ri(1,10))}])) and (${v}${hi()}%${vmVar}.d[${hx(ri(1,10))}]) or ${v}${hi()})*${vmVar}.${op2}((${vmVar}.d[${hx(ri(1,10))}]))))-(${vmVar}.d[${hx(ri(1,10))}]>=${hnbig()} and ${vmVar}.d[${hx(ri(1,10))}] or ${hnbig()})));`,
-  ]
-  return patterns[ri(0, patterns.length-1)]
-}
-
-function generatePLJunk(vmVar, vars, lines) {
-  let j = ""
-  for (let i = 0; i < lines; i++) j += plJunkLine(vmVar, vars)
   return j
 }
 
-// ─── FOR LOOP CFF ESTILO PL ──────────────────────────────────
-
-function forCFF(vmVar, vars, blocks) {
-  const loopVar = plName(ri(8,16))
-  const start = hx(ri(0x50, 0x80))
-  const step  = hx(ri(0x10, 0x30))
-  // Genera valores hex para cada bloque
-  const vals = blocks.map((_, i) => {
-    const base = 0x50 + i * 0x19
-    return hx(base)
-  })
-  const end = hx(0x50 + blocks.length * 0x19)
-
-  let code = `for ${loopVar}=${start},${end},${step} do `
-  blocks.forEach((block, i) => {
-    if (i === 0) code += `if ${loopVar}==${vals[i]} then ${generatePLJunk(vmVar,vars,3)} ${block} `
-    else code += `elseif ${loopVar}==${vals[i]} then ${generatePLJunk(vmVar,vars,2)} ${block} `
-  })
-  code += `end end `
-  return code
+function applyCFF(blocks) {
+  const stateVar = generateIlName()
+  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
+  for (let i = 0; i < blocks.length; i++) {
+    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
+    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
+  }
+  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
+  return lua
 }
 
-// ─── ENCRIPTACIÓN PAYLOAD ─────────────────────────────────────
+function runtimeString(str) {
+  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+}
 
-function buildTrueVM(payloadStr, vmVar) {
+function buildTrueVM(payloadStr) {
   const STACK = generateIlName()
   const KEY = generateIlName()
   const ORDER = generateIlName()
-  const seed = ri(50, 200)
+  
+  const seed = Math.floor(Math.random() * 200) + 50
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
 
-  let vmCore = `local ${STACK}={} local ${KEY}=${hx(seed)} `
+  const chunkSize = 15;
+  let realChunks = [];
+  for(let i = 0; i < payloadStr.length; i += chunkSize) {
+    realChunks.push(payloadStr.slice(i, i + chunkSize));
+  }
 
-  const chunkSize = 15
-  let realChunks = []
-  for (let i = 0; i < payloadStr.length; i += chunkSize)
-    realChunks.push(payloadStr.slice(i, i + chunkSize))
+  let poolVars = [];
+  let realOrder = [];
+  
+  let totalChunks = realChunks.length * 3; 
+  let currentReal = 0;
 
-  let poolVars = [], realOrder = []
-  let totalChunks = realChunks.length * 3
-  let currentReal = 0
-
-  for (let i = 0; i < totalChunks; i++) {
-    let memName = generateIlName()
-    poolVars.push(memName)
-    if (currentReal < realChunks.length &&
-        (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      realOrder.push(i + 1)
-      let chunk = realChunks[currentReal]
-      let enc = chunk.split('').map(c => hx(c.charCodeAt(0) ^ seed))
-      vmCore += `local ${memName}={${enc.join(',')}} `
-      currentReal++
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = generateIlName();
+    poolVars.push(memName);
+    
+    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1);
+      let chunk = realChunks[currentReal];
+      let encryptedBytes = [];
+      for(let j = 0; j < chunk.length; j++) {
+        encryptedBytes.push(heavyMath(chunk.charCodeAt(j) ^ seed));
+      }
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      currentReal++;
     } else {
-      let fake = Array.from({length: ri(5,20)}, () => hx(ri(0,255)))
-      vmCore += `local ${memName}={${fake.join(',')}} `
+      let fakeBytes = [];
+      let fakeLen = Math.floor(Math.random() * 20) + 5;
+      for(let j = 0; j < fakeLen; j++) {
+        fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)));
+      }
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
     }
   }
 
-  vmCore += `local _pool={${poolVars.join(',')}} `
-  vmCore += `local ${ORDER}={${realOrder.map(n => hx(n)).join(',')}} `
-  const idxV = generateIlName(), byteV = generateIlName()
-  vmCore += `for _,${idxV} in ipairs(${ORDER}) do for _,${byteV} in ipairs(_pool[${idxV}]) do `
-  vmCore += `table.insert(${STACK},string.char(bit32.bxor(${byteV},${KEY}))) end end `
-  vmCore += `local _e=table.concat(${STACK}) ${STACK}=nil `
+  vmCore += `local _pool={${poolVars.join(',')}} `;
+  vmCore += `local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
 
-  const rts = s => `string.char(${s.split('').map(c=>hx(c.charCodeAt(0))).join(',')})`
-  const ASSERT = `getfenv()[${rts("assert")}]`
-  const LOADSTRING = `getfenv()[${rts("loadstring")}]`
-  const GAME = `getfenv()[${rts("game")}]`
-  const HTTPGET = rts("HttpGet")
-
+  const idxVar = generateIlName();
+  const byteVar = generateIlName();
+  vmCore += `for _, ${idxVar} in ipairs(${ORDER}) do `;
+  vmCore += `for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, ${KEY}))) `;
+  vmCore += `end end `;
+  
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
+  
+  const ASSERT = `getfenv()[${runtimeString("assert")}]`;
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
+  const GAME = `getfenv()[${runtimeString("game")}]`;
+  const HTTPGET = runtimeString("HttpGet");
+  
   if (payloadStr.includes("http")) {
-    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))()`
+    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `
   } else {
-    vmCore += `${ASSERT}(${LOADSTRING}(_e))()`
+    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
   }
+  
   return vmCore
 }
 
-// ─── SINGLE VM (lM style) con junk PL ─────────────────────────
-
-function buildSingleVM(innerCode, handlerCount, vmVar, vars) {
+function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount)
-  const realIdx = ri(0, handlerCount-1)
+  const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = generateIlName()
-  let out = `local lM={} `
+  let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generatePLJunk(vmVar,vars,4)} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generatePLJunk(vmVar,vars,2)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end `
     }
   }
   out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) out += `[${hx(i+1)}]=${handlers[i]},`
+  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
   out += `} `
-  // CFF estilo PL con for loop
-  const stateV = generateIlName()
-  out += `local ${stateV}=${hx(1)} while true do `
+  let execBlocks = []
   for (let i = 0; i < handlers.length; i++) {
-    if (i === 0) out += `if ${stateV}==${hx(1)} then ${DISPATCH}[${hx(1)}](lM) ${stateV}=${hx(2)} `
-    else out += `elseif ${stateV}==${hx(i+1)} then ${DISPATCH}[${hx(i+1)}](lM) ${stateV}=${hx(i+2)} `
+    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
   }
-  out += `elseif ${stateV}==${hx(handlers.length+1)} then break end end `
+  out += applyCFF(execBlocks)
   return out
 }
 
-// ─── 12 VMs EN CASCADA ────────────────────────────────────────
-
-function build12xVM(payloadStr, vmVar, vars) {
-  let vm = buildTrueVM(payloadStr, vmVar)
+// 12 VM MACHINES: TrueVM + 11 capas SingleVM = 12 VMs en total
+function build12xVM(payloadStr) {
+  let vm = buildTrueVM(payloadStr);
   for (let i = 0; i < 11; i++) {
-    vm = buildSingleVM(vm, ri(4,7), vmVar, vars)
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 4) + 4);
   }
-  return vm
+  return vm;
 }
 
-// ─── 5 ANTI-DEBUGGERS ULTRA FRÁGILES ─────────────────────────
+function getExtraProtections() {
 
-function antiDebuggers() {
-  return (
-    // AD-1: 1 sola iteración, threshold 0.00001 — cualquier lag lo mata
-    `local _adT=os.clock() for _=${hx(1)},${hx(1)} do end if os.clock()-_adT>${hx(0)} then while true do end end ` +
-    // AD-2: debug existe = muerte inmediata
+  // ── 5 ANTI-DEBUGGERS ultra frágiles ────────────────────────────────────────
+  // "Frágil" = trigger al menor indicio: 1 iteración de timing, traceback de 1 char, etc.
+  const antiDebuggers =
+    // AD-1: Timing ultra sensible — cualquier pausa mínima lo activa
+    `local _adT=os.clock() for _=1,1 do end if os.clock()-_adT>0.00001 then while true do end end ` +
+    // AD-2: Detecta si debug.traceback existe en absoluto (incluso vacío)
     `if debug~=nil then while true do end end ` +
-    // AD-3: pcall sentinel exacto — 1 char distinto = muerte
-    `local _ok,_er=pcall(function() error(${hx(0x5644)}) end) if not _ok and not string.find(tostring(_er),tostring(${hx(0x5644)}),${hx(1)},true) then while true do end end ` +
-    // AD-4: getmetatable(_G) no nil = hook detectado
+    // AD-3: pcall con error propio — si el mensaje cambia 1 char, muere
+    `local _adOk,_adE=pcall(function() error("__vvmer__") end) if not _adOk and not string.find(tostring(_adE),"__vvmer__",1,true) then while true do end end ` +
+    // AD-4: getmetatable de _G — cualquier hook lo pone no-nil
     `if rawget~=nil and getmetatable(_G)~=nil then while true do end end ` +
-    // AD-5: print fue reemplazada
-    `if type(print)~=${hx(0)}.."function" then while true do end end `
-  )
-}
+    // AD-5: Si `print` fue reemplazada por algo distinto a function, muere
+    `if type(print)~="function" then while true do end end `;
 
-// ─── 12 ANTI-TAMPERS ──────────────────────────────────────────
-
-function antiTampers() {
-  return (
-    `if math.pi<${hx(3)}.14 or math.pi>${hx(3)}.15 then while true do end end ` +
-    `if bit32 and bit32.bxor(${hx(10)},${hx(5)})~=${hx(15)} then while true do end end ` +
+  // ── 12 ANTI-TAMPERS ────────────────────────────────────────────────────────
+  const antiTampers =
+    `if math.pi<3.14 or math.pi>3.15 then while true do end end ` +
+    `if bit32 and bit32.bxor(10,5)~=15 then while true do end end ` +
     `if type(tostring)~="function" then while true do end end ` +
     `if not string.match("chk","^c.*k$") then while true do end end ` +
     `if type(coroutine.create)~="function" then while true do end end ` +
     `if type(table.concat)~="function" then while true do end end ` +
     `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then while true do end end ` +
-    `if math.abs(-${hx(10)})~=${hx(10)} then while true do end end ` +
-    `if gcinfo and gcinfo()<${hx(0)} then while true do end end ` +
+    `if math.abs(-10)~=10 then while true do end end ` +
+    `if gcinfo and gcinfo()<0 then while true do end end ` +
     `if type(next)~="function" then while true do end end ` +
-    `if string.len("a")~=${hx(1)} then while true do end end ` +
-    `if type(table.insert)~="function" then while true do end end `
-  )
-}
+    `if string.len("a")~=1 then while true do end end ` +
+    `if type(table.insert)~="function" then while true do end end `;
 
-// ─── FUNCIÓN PRINCIPAL ────────────────────────────────────────
+  return antiDebuggers + antiTampers;
+}
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
-
-  // 1. Crear nombre VM estilo PL
-  const vmVar = plName(ri(10,18))
-
-  // 2. Variables fake para el junk (estilo PL: nombres largos)
-  const vars = Array.from({length:8}, () => plName(ri(8,16)))
-
-  // 3. Generar objeto VM con opcodes
-  const vmObj = generateVMObject(vmVar)
-
-  // 4. Detectar payload
-  const urlRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = sourceCode.match(urlRegex)
-  const payload = match ? match[1] : sourceCode
-
-  // 5. Anti-debug + Anti-tamper
-  const adebug = antiDebuggers()
-  const atamper = antiTampers()
-
-  // 6. Junk PL antes del payload (para volumen)
-  const junkBefore = generatePLJunk(vmVar, vars, 60)
-  const junkMid    = generatePLJunk(vmVar, vars, 40)
-  const junkAfter  = generatePLJunk(vmVar, vars, 40)
-
-  // 7. Declarar variables fake locales (como PL)
-  let fakeDecls = ""
-  for (const v of vars) fakeDecls += `local ${v}={} `
-
-  // 8. Build 12 VMs
-  const finalVM = build12xVM(payload, vmVar, vars)
-
-  // 9. Ensamblar
-  let result = [
-    HEADER,
-    vmObj,
-    fakeDecls,
-    junkBefore,
-    adebug,
-    atamper,
-    junkMid,
-    `(function() ${finalVM} end)()`,
-    junkAfter,
-  ].join(" ")
-
-  // 10. Normalizar espacios
-  result = result.replace(/[ \t]+/g, " ").trim()
-
-  // 11. Padding hasta ~32KB (32768 bytes)
-  const TARGET = 32768
-  if (result.length < TARGET) {
-    const needed = TARGET - result.length
-    const extraJunk = generatePLJunk(vmVar, vars, Math.ceil(needed / 120))
-    result = result + " " + extraJunk.trim()
-    // Recortar si se pasó ligeramente
-    if (result.length > TARGET + 512) result = result.slice(0, TARGET)
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.5 then while true do end end `
+  const extraProtections = getExtraProtections()
+  let payloadToProtect = ""
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
+  const match = sourceCode.match(isLoadstringRegex)
+  if (match) {
+    payloadToProtect = match[1]
+  } else {
+    payloadToProtect = detectAndApplyMappings(sourceCode)
   }
-
-  return result
+  
+  // 12 VMs
+  const finalVM = build12xVM(payloadToProtect)
+  
+  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
+  return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
-
-// ─── USO ──────────────────────────────────────────────────────
-// const { obfuscate } = require('./vvmer_obfuscator_pl')
-// require('fs').writeFileSync('out.lua', obfuscate(`print("hola")`))
-// → genera ~32KB de output estilo PL chaos
