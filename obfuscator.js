@@ -1,9 +1,7 @@
 const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
-
-// NUEVA POOL DE HANDLERS CON EMOJIS
-const HANDLER_POOL = ["💀", "🔥", "👻", "🧊", "🌪️", "💎", "🧩", "🎭", "🧨", "🧿", "👽", "👾", "🤖", "🛡️", "🔑"]
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
 
 function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
@@ -14,15 +12,8 @@ function pickHandlers(count) {
   const result = []
   while (result.length < count) {
     const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
-    // Generamos un nombre combinando el emoji con un ID para evitar colisiones
-    const name = base + "_" + Math.floor(Math.random() * 999)
-    if (!used.has(name)) { 
-        used.add(name); 
-        // En Lua, para usar emojis como nombres de variables directos, 
-        // a veces es necesario envolverlos o asegurar que el entorno lo soporte,
-        // pero aquí los usaremos como identificadores de funciones locales.
-        result.push(name) 
-    }
+    const name = base + Math.floor(Math.random() * 99)
+    if (!used.has(name)) { used.add(name); result.push(name) }
   }
   return result
 }
@@ -63,6 +54,7 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
+// TÉCNICA CODE VAULT: Tarpits, Opaque Predicates y Symbol Waterfalls integrados en la Junk
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
@@ -71,12 +63,15 @@ function generateJunk(lines = 100) {
     else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
     else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
     else if (r < 0.7) {
+      // CODE VAULT: Tarpit (Bucle infinito en ruta muerta)
       const tp = generateIlName();
       j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
     } else if (r < 0.85) {
+      // CODE VAULT: Symbol Waterfall Noise
       const vt = generateIlName();
       j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
     } else {
+      // CODE VAULT: Opaque Predicate
       j += `if type(math.pi)=="string" then local _=1 end `
     }
   }
@@ -98,11 +93,13 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
+// TÉCNICAS CODE VAULT APLICADAS: Rolling XOR Affine Cipher y Silent Key Corruption
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
   const SALT = generateIlName();
+  
   const seed = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 250) + 1
+  const saltVal = Math.floor(Math.random() * 250) + 1 // CODE VAULT: Salt rodante
   
   let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
   const chunkSize = 15; let realChunks = [];
@@ -116,6 +113,7 @@ function buildTrueVM(payloadStr) {
       realOrder.push(i + 1);
       let chunk = realChunks[currentReal]; let encryptedBytes = [];
       for(let j = 0; j < chunk.length; j++) { 
+        // CODE VAULT: Cifrado Rolling-XOR Affine -> (byte + key + index*salt) % 256
         let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
         encryptedBytes.push(heavyMath(enc)); 
         globalIndex++;
@@ -132,8 +130,9 @@ function buildTrueVM(payloadStr) {
   vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
   const idxVar = generateIlName(); const byteVar = generateIlName();
   
+  // CODE VAULT: Decode loop con Interwoven Tamper Checks (Corrupción Silenciosa)
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `; 
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `; // Silent corruption
   vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
@@ -147,12 +146,9 @@ function buildTrueVM(payloadStr) {
 }
 
 function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount); 
-  const realIdx = Math.floor(Math.random() * handlerCount);
-  const DISPATCH = generateIlName(); 
-  let out = `local lM={} ` 
+  const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName(); let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
-    // Definimos los handlers como variables locales (usando los nombres de emojis)
     if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end ` } 
     else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end ` }
   }
@@ -171,6 +167,7 @@ function build18xVM(payloadStr) {
   return vm;
 }
 
+// TÉCNICAS CODE VAULT APLICADAS: IIFE Wrappers y Error() Oculto
 function getExtraProtections() {
   const antiDebuggers =
     `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
@@ -179,6 +176,7 @@ function getExtraProtections() {
     `if getmetatable(_G)~=nil then while true do end end ` +
     `if type(print)~="function" then while true do end end `;
 
+  // Conservando todos tus Tampers originales + Categorías nuevas de Code Vault
   const rawTampers = [
     `if math.pi<3.14 or math.pi>3.15 then _err() end`,
     `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
@@ -192,6 +190,7 @@ function getExtraProtections() {
     `if type(next)~="function" then _err() end`,
     `if string.len("a")~=1 then _err() end`,
     `if type(table.insert)~="function" then _err() end`,
+    // CODE VAULT Categorías Extra
     `if string.byte("Z",1)~=90 then _err() end`,
     `if math.floor(-1/10)~=-1 then _err() end`,
     `if (true and 1 or 2)~=1 then _err() end`,
@@ -203,6 +202,8 @@ function getExtraProtections() {
   for(let t of rawTampers) {
     const fnName = generateIlName();
     const errName = generateIlName();
+    // CODE VAULT: Envuelve la guardia en una función anónima inmediata (IIFE) 
+    // y esconde 'error' en una variable local dinámica.
     const injectedError = t.replace("_err()", `${errName}("!")`);
     codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
   }
@@ -226,4 +227,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
-  
+                                                                        
