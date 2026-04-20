@@ -54,13 +54,19 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
+// 4. PREDICADOS OPACOS (Integrados en la función de Junk)
+function opaqueFalse() {
+  const arr = [`type(nil)=="number"`, `tostring(nil)=="1"`, `type(1)=="table"`];
+  return arr[Math.floor(Math.random()*arr.length)];
+}
+
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
     if (r < 0.3) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
     else if (r < 0.6) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-    else j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
+    else j += `if ${opaqueFalse()} then local x=1 end ` // Aplicado Opaque Predicate aquí
   }
   return j
 }
@@ -80,32 +86,70 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
+// 1, 2 Y 3. INTEGRADOS EN TRUE VM (Cifrado Rolling, Símbolos Dinámicos y Corrupción Silenciosa)
 function buildTrueVM(payloadStr) {
-  const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
-  const seed = Math.floor(Math.random() * 200) + 50
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+  const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName();
+  const SALT = generateIlName(); const MAP = generateIlName();
+  
+  const seed = Math.floor(Math.random() * 200) + 50;
+  const salt = Math.floor(Math.random() * 200) + 10;
+
+  // 2. Codificación por Símbolos Dinámicos (Base-10 de 3 símbolos)
+  const charPool = ">#_</$|^!@%?=+-*:.;,(){}[]".split('');
+  charPool.sort(() => Math.random() - 0.5);
+  const sym10 = charPool.slice(0, 10).join('');
+
+  function enc3(b) {
+    return sym10[Math.floor(b/100)] + sym10[Math.floor((b/10)%10)] + sym10[b%10];
+  }
+
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(salt)} `
+  vmCore += `local ${MAP}={}; for i=1,10 do ${MAP}[string.sub("${sym10}",i,i)]=i-1 end `;
+
   const chunkSize = 15; let realChunks = [];
   for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
   let poolVars = []; let realOrder = [];
   let totalChunks = realChunks.length * 3; let currentReal = 0;
+
   for(let i = 0; i < totalChunks; i++) {
     let memName = generateIlName(); poolVars.push(memName);
     if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
       realOrder.push(i + 1);
-      let chunk = realChunks[currentReal]; let encryptedBytes = [];
-      for(let j = 0; j < chunk.length; j++) { encryptedBytes.push(heavyMath(chunk.charCodeAt(j) ^ seed)); }
-      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      let chunk = realChunks[currentReal];
+      let encodedStr = "";
+      for(let j = 0; j < chunk.length; j++) {
+        // 1. Algoritmo Rolling Affine Cipher
+        let encrypted = (chunk.charCodeAt(j) + seed + j * salt) % 256;
+        encodedStr += enc3(encrypted); // Empaquetado con los símbolos
+      }
+      vmCore += `local ${memName}="${encodedStr}" `;
       currentReal++;
     } else {
-      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 20) + 5;
-      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMath(Math.floor(Math.random() * 255))); }
-      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
+      let fakeLen = Math.floor(Math.random() * 20) + 5;
+      let fakeStr = "";
+      for(let j = 0; j < fakeLen; j++) {
+        fakeStr += enc3(Math.floor(Math.random() * 255));
+      }
+      vmCore += `local ${memName}="${fakeStr}" `;
     }
   }
+  
   vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
-  const idxVar = generateIlName(); const byteVar = generateIlName();
-  vmCore += `for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, ${KEY}))) end end `;
+  
+  const idxVar = generateIlName();
+  
+  // 3. Corrupción Silenciosa (Si se detecta manipulación, cambia la clave en lugar de lanzar error)
+  const SILENT_CORRUPT = `if type(tostring)~="function" then ${KEY}=(${KEY}+173)%256 end `; 
+
+  vmCore += `for _, ${idxVar} in ipairs(${ORDER}) do local _str=_pool[${idxVar}]; local _j=0; for _i=1,#_str,3 do `;
+  vmCore += SILENT_CORRUPT;
+  vmCore += `local _c0=${MAP}[string.sub(_str,_i,_i)] or 0 local _c1=${MAP}[string.sub(_str,_i+1,_i+1)] or 0 local _c2=${MAP}[string.sub(_str,_i+2,_i+2)] or 0 `;
+  vmCore += `local _b=_c0*100+_c1*10+_c2 `;
+  // Lógica de Descifrado Rolling Affine
+  vmCore += `table.insert(${STACK}, string.char(math.floor((_b - ${KEY} - _j * ${SALT}) % 256))) _j=_j+1 end end `;
+
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
+  
   const ASSERT = `getfenv()[${runtimeString("assert")}]`;
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
   const GAME = `getfenv()[${runtimeString("game")}]`;
@@ -129,17 +173,16 @@ function buildSingleVM(innerCode, handlerCount) {
   out += applyCFF(execBlocks); return out
 }
 
-// 18 VM MACHINES: 1 TrueVM + 17 capas SingleVM
-function build18xVM(payloadStr) {
+// EXACTAMENTE 3 VM MACHINES: 1 TrueVM + 2 capas SingleVM
+function build3xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
-  for (let i = 0; i < 17; i++) {
+  for (let i = 0; i < 2; i++) { // 2 iteraciones + 1 TrueVM = 3 VMs
     vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
   }
   return vm;
 }
 
 function getExtraProtections() {
-  // 5 Anti-Debuggers ultra frágiles con margen de 5 segundos
   const antiDebuggers =
     `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
     `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
@@ -147,7 +190,6 @@ function getExtraProtections() {
     `if getmetatable(_G)~=nil then while true do end end ` +
     `if type(print)~="function" then while true do end end `;
 
-  // 12 Anti-Tampers
   const antiTampers =
     `if math.pi<3.14 or math.pi>3.15 then while true do end end ` +
     `if bit32 and bit32.bxor(10,5)~=15 then while true do end end ` +
@@ -175,9 +217,11 @@ function obfuscate(sourceCode) {
   if (match) { payloadToProtect = match[1] } 
   else { payloadToProtect = detectAndApplyMappings(sourceCode) }
   
-  const finalVM = build18xVM(payloadToProtect)
+  // Llamamos a las 3 VMs en lugar de 18
+  const finalVM = build3xVM(payloadToProtect)
   const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
+        
