@@ -54,18 +54,19 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
-// 4. PREDICADOS OPACOS 
 function opaqueFalse() {
   const arr = [`type(nil)=="number"`, `tostring(nil)=="1"`, `type(1)=="table"`];
   return arr[Math.floor(Math.random()*arr.length)];
 }
 
+// TÉCNICA 1: TARPITS (POZOS DE BREA) de CodeVault
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
     if (r < 0.3) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-    else if (r < 0.6) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
+    else if (r < 0.5) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
+    else if (r < 0.7) j += `if ${opaqueFalse()} then for _=1, 1000000 do end end ` // Tarpit: Bucle pesado en ruta falsa
     else j += `if ${opaqueFalse()} then local x=1 end ` 
   }
   return j
@@ -86,7 +87,6 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// INTEGRACIÓN DE LAS 6 TÉCNICAS EN LA TRUE VM
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName();
   const SALT = generateIlName(); const MAP = generateIlName(); const ENV_PROXY = generateIlName();
@@ -94,13 +94,13 @@ function buildTrueVM(payloadStr) {
   const seed = Math.floor(Math.random() * 200) + 50;
   const salt = Math.floor(Math.random() * 200) + 10;
 
-  // 5. Proxy de Entorno (Environment Proxying)
   let vmCore = `local ${ENV_PROXY} = setmetatable({}, {__index = getfenv()}) `;
 
-  // 2. Codificación por Símbolos Dinámicos (Base-10 de 3 símbolos)
-  const charPool = ">#_</$|^!@%?=+-*:.;,(){}[]".split('');
-  charPool.sort(() => Math.random() - 0.5);
-  const sym10 = charPool.slice(0, 10).join('');
+  // TÉCNICA 2: RESHUFFLED ALPHABET de CodeVault
+  // Selecciona 10 caracteres de un pool de 22 y los mezcla
+  const pool22 = "ABCDEFGHIJ0123456789!#".split('');
+  pool22.sort(() => Math.random() - 0.5);
+  const sym10 = pool22.slice(0, 10).join('');
 
   function enc3(b) {
     return sym10[Math.floor(b/100)] + sym10[Math.floor((b/10)%10)] + sym10[b%10];
@@ -113,7 +113,7 @@ function buildTrueVM(payloadStr) {
   for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
   let poolVars = []; let realOrder = [];
   let totalChunks = realChunks.length * 3; let currentReal = 0;
-  let totalValidBytes = 0; // Para el Checksum
+  let totalValidBytes = 0;
 
   for(let i = 0; i < totalChunks; i++) {
     let memName = generateIlName(); poolVars.push(memName);
@@ -122,7 +122,6 @@ function buildTrueVM(payloadStr) {
       let chunk = realChunks[currentReal];
       let encodedStr = "";
       for(let j = 0; j < chunk.length; j++) {
-        // 1. Algoritmo Rolling Affine Cipher
         let encrypted = (chunk.charCodeAt(j) + seed + j * salt) % 256;
         encodedStr += enc3(encrypted); 
       }
@@ -139,15 +138,16 @@ function buildTrueVM(payloadStr) {
   
   vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
   
-  // 6. Checksum Anti-Manipulación
+  // TÉCNICA 3: SILENT KEY CORRUPTION de CodeVault
+  // En lugar de error(), altera la llave si el checksum falla
   const chkVar = generateIlName();
   vmCore += `local ${chkVar}=0; for _,v in ipairs(${ORDER}) do ${chkVar}=${chkVar}+#_pool[v] end `;
-  vmCore += `if ${chkVar}~=${totalValidBytes} then ${KEY}=0 end `; // Corrupción por Checksum
+  vmCore += `if ${chkVar}~=${totalValidBytes} then ${KEY}=(${KEY}+${heavyMath(Math.floor(Math.random()*100))})%256 end `; 
 
   const idxVar = generateIlName();
   
-  // 3. Corrupción Silenciosa 
-  const SILENT_CORRUPT = `if type(tostring)~="function" then ${KEY}=(${KEY}+173)%256 end `; 
+  // Más corrupción silenciosa si tostring es alterado
+  const SILENT_CORRUPT = `if type(tostring)~="function" then ${KEY}=(${KEY}+13)%256 end `; 
 
   vmCore += `for _, ${idxVar} in ipairs(${ORDER}) do local _str=_pool[${idxVar}]; local _j=0; for _i=1,#_str,3 do `;
   vmCore += SILENT_CORRUPT;
@@ -157,7 +157,6 @@ function buildTrueVM(payloadStr) {
 
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
   
-  // Usamos el Proxy (ENV_PROXY) en lugar de getfenv()
   const ASSERT = `${ENV_PROXY}[${runtimeString("assert")}]`;
   const LOADSTRING = `${ENV_PROXY}[${runtimeString("loadstring")}]`;
   const GAME = `${ENV_PROXY}[${runtimeString("game")}]`;
@@ -182,7 +181,6 @@ function buildSingleVM(innerCode, handlerCount) {
   out += applyCFF(execBlocks); return out
 }
 
-// 3 VM MACHINES: 1 TrueVM + 2 capas SingleVM
 function build3xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
   for (let i = 0; i < 2; i++) { 
