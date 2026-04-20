@@ -59,14 +59,13 @@ function opaqueFalse() {
   return arr[Math.floor(Math.random()*arr.length)];
 }
 
-// TÉCNICA 1: TARPITS (POZOS DE BREA) de CodeVault
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
     if (r < 0.3) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
     else if (r < 0.5) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-    else if (r < 0.7) j += `if ${opaqueFalse()} then for _=1, 1000000 do end end ` // Tarpit: Bucle pesado en ruta falsa
+    else if (r < 0.7) j += `if ${opaqueFalse()} then for _=1, 1000000 do end end ` 
     else j += `if ${opaqueFalse()} then local x=1 end ` 
   }
   return j
@@ -96,8 +95,6 @@ function buildTrueVM(payloadStr) {
 
   let vmCore = `local ${ENV_PROXY} = setmetatable({}, {__index = getfenv()}) `;
 
-  // TÉCNICA 2: RESHUFFLED ALPHABET de CodeVault
-  // Selecciona 10 caracteres de un pool de 22 y los mezcla
   const pool22 = "ABCDEFGHIJ0123456789!#".split('');
   pool22.sort(() => Math.random() - 0.5);
   const sym10 = pool22.slice(0, 10).join('');
@@ -138,15 +135,11 @@ function buildTrueVM(payloadStr) {
   
   vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
   
-  // TÉCNICA 3: SILENT KEY CORRUPTION de CodeVault
-  // En lugar de error(), altera la llave si el checksum falla
   const chkVar = generateIlName();
   vmCore += `local ${chkVar}=0; for _,v in ipairs(${ORDER}) do ${chkVar}=${chkVar}+#_pool[v] end `;
   vmCore += `if ${chkVar}~=${totalValidBytes} then ${KEY}=(${KEY}+${heavyMath(Math.floor(Math.random()*100))})%256 end `; 
 
   const idxVar = generateIlName();
-  
-  // Más corrupción silenciosa si tostring es alterado
   const SILENT_CORRUPT = `if type(tostring)~="function" then ${KEY}=(${KEY}+13)%256 end `; 
 
   vmCore += `for _, ${idxVar} in ipairs(${ORDER}) do local _str=_pool[${idxVar}]; local _j=0; for _i=1,#_str,3 do `;
@@ -181,15 +174,17 @@ function buildSingleVM(innerCode, handlerCount) {
   out += applyCFF(execBlocks); return out
 }
 
+// ACTUALIZACIÓN: 5 Virtual Machines
 function build3xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
-  for (let i = 0; i < 2; i++) { 
+  for (let i = 0; i < 4; i++) { 
     vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
   }
   return vm;
 }
 
 function getExtraProtections() {
+  // ACTUALIZACIÓN: 4 Anti-Debugs y 3 Anti-Tampers integrados
   const antiDebuggers =
     `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
     `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
@@ -230,3 +225,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
+      
