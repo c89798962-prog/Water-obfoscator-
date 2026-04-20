@@ -1,6 +1,6 @@
 const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
 
-const IL_POOL = ["\\108\\105\\108", "\\118\\118\\118", "\\105\\105\\105", "\\108\\118\\105", "\\118\\108\\105", "\\105\\108\\118", "\\108\\108\\118", "\\118\\105\\108", "\\105\\118\\108"]
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
 
 function generateIlName() {
@@ -183,7 +183,6 @@ function getExtraProtections() {
     `if type(tostring)~="function" then _err() end`,
     `if not string.match("chk","^c.*k$") then _err() end`,
     `if type(coroutine.create)~="function" then _err() end`,
-    `if type(coroutine.create)~="function" then _err() end`,
     `if type(table.concat)~="function" then _err() end`,
     `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`,
     `if math.abs(-10)~=10 then _err() end`,
@@ -228,4 +227,4 @@ function obfuscate(sourceCode) {
 }
 
 module.exports = { obfuscate }
-    
+                                                                        
