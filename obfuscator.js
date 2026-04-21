@@ -1,275 +1,414 @@
-/**
- * ╔══════════════════════════════════════════════════════════════╗
- * ║       Tomato Deobfusquer v2  –  JavaScript Edition          ║
- * ║   Invierte CodeVault v35 rolling-XOR + base-10 encoding     ║
- * ║   Compatible con Node.js  (node tomato_deobfusquer.js)       ║
- * ╚══════════════════════════════════════════════════════════════╝
- *
- * Uso (Node.js):
- *   node tomato_deobfusquer.js input_obf.lua [output_clean.lua]
- *
- * También exporta  deobfuscate(luaCode)  para usar como módulo.
- */
+const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
 
-"use strict";
+// Pool ampliado — mucho más difícil de distinguir visualmente
+const IL_POOL = [
+  "IIIIIIII1","vvvvvv1","vvvvvvvv2","vvvvvv3","IIlIlIlI1","lvlvlvlv2",
+  "I1","l1","v1","v2","v3","II","ll","vv","I2",
+  "lllllll1","IIIlll2","vIvIvI3","lIlIlI4","vvIIll5","IllvvI6",
+  "lllIII7","vvvlll8","IIIvvv9","lIvIlI0","vIlvIl1","IlvIlv2",
+  "llllll3","IIIIII4","vvvvvv5","lllvvv6","IIIlll7","vvvIII8",
+  "lIIlIl9","vllvll0","IvvIvv1","lvvllv2","vIIvII3","lllIlI4",
+  "IIvIIv5","vvlvvl6","lIvlIv7","IlIvIl8","vIlIvI9","llIllI0"
+]
 
-// ── Watermark que se añade al inicio de todo código desobfuscado ────────────
-const WATERMARK = "--[[this code it's deobfosquet by tomato deobfosquer ]]\n";
+const HANDLER_POOL = [
+  "KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD",
+  "Zk","Pr","Uo","Ei","Fy","Gx","Jw","Lh","Mn","Ov"
+]
 
-// ── Pool de caracteres válidos del codec de CodeVault v35 ───────────────────
-const CODEC_POOL = new Set([...">#_</$|^!@%?=+-*:.;,(){}[]"]);
+// ─── Nombres y handlers ────────────────────────────────────────────────────────
 
-// ── Mensajes de log con prefijo // ─────────────────────────────────────────
-const log  = (msg) => console.log(`// ${msg}`);
-const warn = (msg) => console.warn(`// ⚠  ${msg}`);
-const fail = (msg) => { throw new Error(`// ❌  ${msg}`); };
+function generateIlName() {
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] +
+         Math.floor(Math.random() * 999999)
+}
 
-// ════════════════════════════════════════════════════════════════════════════
-// UTILIDADES
-// ════════════════════════════════════════════════════════════════════════════
-
-/**
- * Parsea un número Lua: hex (0x...), decimal, negativo, con paréntesis.
- * Más robusto que parseInt: maneja 0X, paréntesis anidados, espacios.
- */
-function parseLuaNum(raw) {
-  let s = raw.trim();
-  // quitar paréntesis externos mientras haya
-  while (s.startsWith("(") && s.endsWith(")")) s = s.slice(1, -1).trim();
-  const neg = s.startsWith("-");
-  if (neg) {
-    s = s.slice(1).trim();
-    while (s.startsWith("(") && s.endsWith(")")) s = s.slice(1, -1).trim();
+function pickHandlers(count) {
+  const used = new Set(), result = []
+  while (result.length < count) {
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
+    const name = base + Math.floor(Math.random() * 999)
+    if (!used.has(name)) { used.add(name); result.push(name) }
   }
-  const v = s.toLowerCase().startsWith("0x")
-    ? parseInt(s, 16)
-    : parseInt(s, 10);
-  if (isNaN(v)) fail(`No se pudo parsear el número: "${raw}"`);
-  return neg ? -v : v;
+  return result
 }
 
-/**
- * Busca TODOS los matches de un regex en un string (generator).
- */
-function* matchAll(str, regex) {
-  const re = new RegExp(regex.source, regex.flags.includes("g") ? regex.flags : regex.flags + "g");
-  let m;
-  while ((m = re.exec(str)) !== null) yield m;
+// ─── Matemáticas pesadas / MBA ─────────────────────────────────────────────────
+
+function heavyMath(n) {
+  if (Math.random() < 0.5) return n.toString()
+  const ops = [
+    () => { // Nested add/mul cancel
+      let a = Math.floor(Math.random() * 3000) + 500
+      let b = Math.floor(Math.random() * 50) + 2
+      let c = Math.floor(Math.random() * 800) + 10
+      let d = Math.floor(Math.random() * 20) + 2
+      return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
+    },
+    () => { // Bitwise-style with math
+      let x = Math.floor(Math.random() * 128) + 1
+      return `(((${n} + ${x}) - ${x}))`
+    },
+    () => { // Double negate cancel
+      let k = Math.floor(Math.random() * 500) + 100
+      return `(-(-(${n}+${k}))-${k})`
+    },
+    () => { // mul/div by prime
+      const primes = [3,5,7,11,13,17,19,23]
+      let p = primes[Math.floor(Math.random() * primes.length)]
+      return `((${n}*${p})/${p})`
+    }
+  ]
+  return ops[Math.floor(Math.random() * ops.length)]()
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// MOTOR PRINCIPAL DE DEOBFUSCACIÓN
-// ════════════════════════════════════════════════════════════════════════════
+function mba() {
+  const n = Math.random() > 0.5 ? 1 : 2
+  const a = Math.floor(Math.random() * 70) + 15
+  const b = Math.floor(Math.random() * 40) + 8
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`
+}
 
-/**
- * Desobfusca un string de código Lua generado por CodeVault v35.
- * Retorna el código fuente original como string.
- *
- * Pasos:
- *  1. Encontrar el MAP (tabla 10 entradas → char a dígito 0-9)
- *  2. Identificar vK y vS por la estructura del bucle decode
- *  3. Leer los valores numéricos de key y salt
- *  4. Recuperar los 4 chunks del payload cifrado
- *  5. Invertir rolling-XOR: byte = (encoded - key - i*salt) % 256
- *  6. Decodificar bytes → UTF-8
- */
-function deobfuscate(luaCode) {
+// ─── Mappings de palabras clave ────────────────────────────────────────────────
 
-  // ── PASO 1: Encontrar el MAP del codec ─────────────────────────────────
-  // Patrón emitido por CodeVault: local <var>={["c"]=N, ["c"]=N, ...}  (10 entradas)
-  log("Paso 1/5 → Buscando tabla MAP del codec...");
+const MAPEO = {
+  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+}
 
-  let charMap = null;
-
-  for (const m of matchAll(
-    luaCode,
-    /local\s+[Il_]+\s*=\s*\{((?:\["[^"]{1}"\]\s*=[^,}]+,?\s*){8,12})\}/
-  )) {
-    const body = m[1];
-    const entries = [...matchAll(body, /\["([^"]{1})"\]\s*=\s*([^,}\s]+)/)]
-      .map(e => [e[1], e[2]]);
-
-    if (
-      entries.length === 10 &&
-      entries.every(([ch]) => CODEC_POOL.has(ch))
-    ) {
-      try {
-        charMap = new Map(entries.map(([ch, raw]) => [ch, parseLuaNum(raw)]));
-        log(`  MAP encontrado: { ${[...charMap.entries()].map(([k,v])=>`"${k}"→${v}`).join(", ")} }`);
-        break;
-      } catch (_) { /* intentar siguiente match */ }
+function detectAndApplyMappings(code) {
+  let modified = code, headers = ""
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g")
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`
+      if (tech.includes("Aggressive Renaming")) {
+        const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v
+      } else if (tech.includes("String to Math")) {
+        replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
+      } else if (tech.includes("Mixed Boolean Arithmetic")) {
+        replacement = `((${mba()}==1 or true)and"${word}")`
+      }
+      regex.lastIndex = 0
+      modified = modified.replace(regex, () => `game[${replacement}]`)
     }
   }
+  return headers + modified
+}
 
-  if (!charMap) fail(
-    "No se encontró el MAP del codec.\n" +
-    "//    Verifica que el archivo fue generado por CodeVault v35."
-  );
+// ─── Basura / Junk con tarpits, opaque predicates, waterfall ──────────────────
 
-  const symChars = new Set(charMap.keys());
-
-  // ── PASO 2: Identificar vK y vS por el bucle decode ────────────────────
-  // CodeVault siempre emite:
-  //   local _kv=(<vK>+0)%<256_hex>
-  //   ... -_xi*<vS>) ...
-  log("Paso 2/5 → Identificando variables de clave y salt en el bucle decode...");
-
-  const mKv  = /local\s+_kv\s*=\s*\(([Il_]+)\+0\)/.exec(luaCode);
-  const mXs  = /_xi\s*\*\s*([Il_]+)/.exec(luaCode);
-
-  if (!mKv) fail("No se encontró '_kv=(<vK>+0)' en el bucle decode.");
-  if (!mXs) fail("No se encontró '_xi*<vS>' en el bucle decode.");
-
-  const vKname = mKv[1];
-  const vSname = mXs[1];
-  log(`  Variable clave: ${vKname} | Variable salt: ${vSname}`);
-
-  // ── PASO 3: Leer valores numéricos ─────────────────────────────────────
-  log("Paso 3/5 → Leyendo valores de key y salt...");
-
-  const numPat = String.raw`\(?\s*-?\s*0[xX][0-9a-fA-F]+\s*\)?|\(?\s*-?\s*\d+\s*\)?`;
-
-  const mKey  = new RegExp(`local\\s+${escRe(vKname)}\\s*=\\s*(${numPat})`).exec(luaCode);
-  const mSalt = new RegExp(`local\\s+${escRe(vSname)}\\s*=\\s*(${numPat})`).exec(luaCode);
-
-  if (!mKey)  fail(`No se encontró el valor de la clave (${vKname}).`);
-  if (!mSalt) fail(`No se encontró el valor del salt (${vSname}).`);
-
-  const key  = parseLuaNum(mKey[1]);
-  const salt = parseLuaNum(mSalt[1]);
-  log(`  key = ${key} | salt = ${salt}`);
-
-  // ── PASO 4: Recuperar los 4 chunks del payload ─────────────────────────
-  // CodeVault emite: local <vFULL>=<vTC>({<c1>,<c2>,<c3>,<c4>})
-  log("Paso 4/5 → Localizando los 4 chunks del payload cifrado...");
-
-  const mTC = /local\s+([Il_]+)\s*=\s*[Il_]+\s*\(\{([Il_,\s]+)\}\)/.exec(luaCode);
-  if (!mTC) fail("No se encontró el table.concat de chunks.");
-
-  const chunkVars = [...mTC[2].matchAll(/[Il_]+/g)].map(x => x[0]);
-  if (chunkVars.length !== 4) fail(
-    `Se esperaban 4 chunk-vars, se encontraron ${chunkVars.length}.`
-  );
-  log(`  Chunk vars: ${chunkVars.join(", ")}`);
-
-  let fullEncoded = "";
-  for (const varName of chunkVars) {
-    const mChunk = new RegExp(`local\\s+${escRe(varName)}\\s*=\\s*"([^"]+)"`).exec(luaCode);
-    if (!mChunk) fail(`No se encontró el valor del chunk '${varName}'.`);
-
-    const chunk = mChunk[1];
-
-    // Validación extra: todos los chars deben pertenecer al sym10
-    const badChars = [...chunk].filter(c => !symChars.has(c));
-    if (badChars.length > 0) fail(
-      `Chunk '${varName}' contiene ${badChars.length} caracteres inválidos.\n` +
-      `//    Primeros inválidos: ${[...new Set(badChars)].slice(0,8).join(" ")}`
-    );
-
-    fullEncoded += chunk;
-    log(`  Chunk '${varName}': ${chunk.length} chars`);
-  }
-
-  if (fullEncoded.length % 3 !== 0) {
-    warn(`Longitud del payload (${fullEncoded.length}) no es múltiplo de 3. Recortando...`);
-    fullEncoded = fullEncoded.slice(0, fullEncoded.length - fullEncoded.length % 3);
-  }
-
-  log(`  Payload total: ${fullEncoded.length} chars → ${fullEncoded.length / 3} bytes`);
-
-  // ── PASO 5: Invertir el rolling-XOR ────────────────────────────────────
-  // Cifrado original: c[i] = (b[i] + key + i*salt) % 256
-  // Inverso:          b[i] = (c[i] - key - i*salt + 256*N) % 256
-  log("Paso 5/5 → Decodificando payload (rolling-XOR inverso)...");
-
-  const byteLen = fullEncoded.length / 3;
-  const decoded = new Uint8Array(byteLen);
-
-  for (let xi = 0; xi < byteLen; xi++) {
-    const i  = xi * 3;
-    const c0 = charMap.get(fullEncoded[i])     ?? 0;
-    const c1 = charMap.get(fullEncoded[i + 1]) ?? 0;
-    const c2 = charMap.get(fullEncoded[i + 2]) ?? 0;
-    const encodedByte = c0 * 100 + c1 * 10 + c2;
-    // Mod aritmético positivo garantizado sumando 256*múltiplo
-    decoded[xi] = ((encodedByte - key - xi * salt) % 256 + 256) % 256;
-  }
-
-  // ── Decodificar bytes a texto UTF-8 ────────────────────────────────────
-  let source;
-  try {
-    // En Node.js usamos Buffer
-    if (typeof Buffer !== "undefined") {
-      source = Buffer.from(decoded).toString("utf8");
+function generateJunk(lines = 100) {
+  let j = ""
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random()
+    if (r < 0.12) {
+      j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
+    } else if (r < 0.24) {
+      j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random() * 255))}) `
+    } else if (r < 0.34) {
+      j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
+    } else if (r < 0.46) {
+      // Tarpit
+      const tp = generateIlName()
+      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
+    } else if (r < 0.57) {
+      // Symbol Waterfall
+      const vt = generateIlName()
+      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
+    } else if (r < 0.66) {
+      // Opaque predicate
+      j += `if type(math.pi)=="string" then local _=1 end `
+    } else if (r < 0.75) {
+      // Cadena falsa desechada inmediatamente
+      const sv = generateIlName()
+      const fakeStr = Array.from({length: Math.floor(Math.random()*6)+3},
+        () => heavyMath(Math.floor(Math.random()*90)+32)).join(",")
+      j += `local ${sv}=string.char(${fakeStr}) ${sv}=nil `
+    } else if (r < 0.84) {
+      // Tabla con índices numéricos falsos
+      const tv = generateIlName()
+      const entries = Array.from({length: Math.floor(Math.random()*4)+2},
+        (_,i) => `[${heavyMath(i+1)}]=${heavyMath(Math.floor(Math.random()*999))}`).join(",")
+      j += `do local ${tv}={${entries}} ${tv}=nil end `
+    } else if (r < 0.92) {
+      // pcall basura
+      const fn = generateIlName()
+      j += `local ${fn}=function() return ${heavyMath(0)} end pcall(${fn}) ${fn}=nil `
     } else {
-      // En browser / Deno usamos TextDecoder
-      source = new TextDecoder("utf-8").decode(decoded);
+      // Double opaque con string
+      j += `if type("x")=="number" then local _=1 end `
     }
-  } catch (e) {
-    warn("UTF-8 falló, intentando latin-1...");
-    source = [...decoded].map(b => String.fromCharCode(b)).join("");
   }
-
-  log(`  ✅ Desobfuscación exitosa: ${source.length} caracteres recuperados`);
-  return source;
+  return j
 }
 
-// ── Escapar caracteres especiales de regex ──────────────────────────────────
-function escRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// ─── Control Flow Flattening ───────────────────────────────────────────────────
+
+function applyCFF(blocks) {
+  const stateVar = generateIlName()
+  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
+  for (let i = 0; i < blocks.length; i++) {
+    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
+    else lua += `elseif ${stateVar}==${heavyMath(i+1)} then ${blocks[i]} ${stateVar}=${heavyMath(i+2)} `
+  }
+  lua += `elseif ${stateVar}==${heavyMath(blocks.length+1)} then break end end `
+  return lua
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// CLI  (Node.js)
-// ════════════════════════════════════════════════════════════════════════════
+// ─── Runtime string encoder ───────────────────────────────────────────────────
 
-if (
-  typeof process !== "undefined" &&
-  typeof require !== "undefined" &&
-  require.main === module
-) {
-  const fs   = require("fs");
-  const path = require("path");
-
-  const args = process.argv.slice(2).filter(a => !a.startsWith("--"));
-  if (args.length < 1) {
-    console.log(
-      "// Uso: node tomato_deobfusquer.js input_obf.lua [output_clean.lua]\n" +
-      "// También: const { deobfuscate } = require('./tomato_deobfusquer');"
-    );
-    process.exit(1);
-  }
-
-  const inFile  = args[0];
-  const outFile = args[1] ?? path.basename(inFile, ".lua") + "_clean.lua";
-
-  log(`Tomato Deobfusquer v2 — JavaScript Edition`);
-  log(`Leyendo: ${inFile}`);
-
-  let luaCode;
-  try {
-    luaCode = fs.readFileSync(inFile, "utf8");
-  } catch (e) {
-    fail(`No se pudo leer '${inFile}': ${e.message}`);
-  }
-
-  let clean;
-  try {
-    clean = deobfuscate(luaCode);
-  } catch (e) {
-    console.error(e.message);
-    process.exit(1);
-  }
-
-  const result = WATERMARK + clean;
-  fs.writeFileSync(outFile, result, "utf8");
-
-  log(`Salida: ${outFile} (${result.length} bytes)`);
-  log(`Código limpio: ${clean.length} bytes`);
-  log(`Todas las capas de ofuscación eliminadas ✅`);
+function runtimeString(str) {
+  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
 }
 
-// ── Export para uso como módulo ─────────────────────────────────────────────
-if (typeof module !== "undefined") {
-  module.exports = { deobfuscate, WATERMARK };
+// ─── VM Real (capa más profunda) — cifrado Rolling-XOR Affine con doble sal ───
+
+function buildTrueVM(payloadStr) {
+  const STACK   = generateIlName()
+  const KEY     = generateIlName()
+  const ORDER   = generateIlName()
+  const SALT    = generateIlName()
+  const SALT2   = generateIlName()   // Segunda sal para mayor resistencia
+
+  const seed    = Math.floor(Math.random() * 200) + 50
+  const saltVal = Math.floor(Math.random() * 250) + 1
+  const salt2   = Math.floor(Math.random() * 127) + 1   // primo pequeño
+
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+             + `local ${SALT}=${heavyMath(saltVal)} local ${SALT2}=${heavyMath(salt2)} `
+
+  const chunkSize = 12    // chunks más pequeños → más slots falsos posibles
+  const realChunks = []
+  for (let i = 0; i < payloadStr.length; i += chunkSize)
+    realChunks.push(payloadStr.slice(i, i + chunkSize))
+
+  // ≈ 4× de slots (3× antes → 4×) → más relleno falso
+  const totalChunks = realChunks.length * 4
+  const realOrder   = []
+  let currentReal   = 0
+  let globalIndex   = 0
+
+  const poolVars = []
+  for (let i = 0; i < totalChunks; i++) {
+    const memName = generateIlName()
+    poolVars.push(memName)
+    const mustPlace = (totalChunks - i) === (realChunks.length - currentReal)
+    if (currentReal < realChunks.length && (Math.random() > 0.6 || mustPlace)) {
+      realOrder.push(i + 1)
+      const chunk = realChunks[currentReal]
+      const encBytes = []
+      for (let j = 0; j < chunk.length; j++) {
+        // Rolling-XOR Affine con dos sales: (byte + seed + idx*salt + idx²*salt2) % 256
+        const enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal) + (globalIndex * globalIndex * salt2)) % 256
+        encBytes.push(heavyMath(enc))
+        globalIndex++
+      }
+      vmCore += `local ${memName}={${encBytes.join(',')}} `
+      currentReal++
+    } else {
+      const fakeLen = Math.floor(Math.random() * 25) + 8
+      const fakeBytes = Array.from({length: fakeLen}, () => heavyMath(Math.floor(Math.random() * 255)))
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
     }
+  }
+
+  vmCore += `local _pool={${poolVars.join(',')}} `
+          + `local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `
+
+  const idxVar  = generateIlName()
+  const byteVar = generateIlName()
+  const gIdx    = generateIlName()
+
+  // Decode loop con 3 Tamper Checks silenciosos entretejidos
+  vmCore += `local ${gIdx}=0 `
+          + `for _,${idxVar} in ipairs(${ORDER}) do `
+          +   `for _,${byteVar} in ipairs(_pool[${idxVar}]) do `
+          +     `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `          // corrupción silenciosa 1
+          +     `if type(tostring)~="function" then ${SALT}=(${SALT}+31)%256 end `      // corrupción silenciosa 2
+          +     `if type(nil)=="table" then ${SALT2}=(${SALT2}+97)%256 end `            // corrupción silenciosa 3
+          +     `local _d=(${byteVar}-${KEY}-${gIdx}*${SALT}-${gIdx}*${gIdx}*${SALT2})%256 `
+          +     `if _d<0 then _d=_d+256 end `
+          +     `table.insert(${STACK},string.char(math.floor(_d))) `
+          +     `${gIdx}=${gIdx}+1 `
+          +   `end `
+          + `end `
+
+  vmCore += `local _e=table.concat(${STACK}) ${STACK}=nil `
+
+  const ASSERT     = `getfenv()[${runtimeString("assert")}]`
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`
+  const GAME       = `getfenv()[${runtimeString("game")}]`
+  const HTTPGET    = runtimeString("HttpGet")
+
+  if (payloadStr.includes("http"))
+    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `
+  else
+    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
+
+  return vmCore
+}
+
+// ─── VM Individual (capa intermedia) ──────────────────────────────────────────
+
+function buildSingleVM(innerCode, handlerCount) {
+  const handlers  = pickHandlers(handlerCount)
+  const realIdx   = Math.floor(Math.random() * handlerCount)
+  const DISPATCH  = generateIlName()
+  let out = `local lM={} `
+
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx)
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(6)} ${innerCode} end `
+    else
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(4)} return nil end `
+  }
+
+  out += `local ${DISPATCH}={`
+  for (let i = 0; i < handlers.length; i++) out += `[${heavyMath(i+1)}]=${handlers[i]},`
+  out += `} `
+
+  const execBlocks = []
+  for (let i = 0; i < handlers.length; i++) execBlocks.push(`${DISPATCH}[${heavyMath(i+1)}](lM)`)
+  out += applyCFF(execBlocks)
+  return out
+}
+
+// ─── 22 VMs reales (capa profunda) ────────────────────────────────────────────
+
+function build22xVM(payloadStr) {
+  let vm = buildTrueVM(payloadStr)
+  for (let i = 0; i < 21; i++) {   // 1 TrueVM + 21 SingleVM = 22 total
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 3) + 3)
+  }
+  return vm
+}
+
+// ─── Capa DECOY externa (lo que se ve primero al analizar) ────────────────────
+//  Parece ser "la protección", pero sólo envuelve el núcleo real.
+//  Son VMs falsas que simplemente ejecutan el siguiente nivel con pcall.
+
+function buildDecoyLayer(innerCode) {
+  // 4 VMs decoy apiladas sobre el código real
+  let code = innerCode
+  for (let d = 0; d < 4; d++) {
+    const fnWrap  = generateIlName()
+    const okVar   = generateIlName()
+    const errVar  = generateIlName()
+    const handlers = pickHandlers(Math.floor(Math.random() * 3) + 4)
+    const realIdx  = Math.floor(Math.random() * handlers.length)
+    const DISPATCH = generateIlName()
+
+    let layer = `local lM={} `
+    for (let i = 0; i < handlers.length; i++) {
+      if (i === realIdx) {
+        // Handler real: envuelve en pcall con junk alrededor
+        layer += `local ${handlers[i]}=function() `
+               + `${generateJunk(8)} `
+               + `local ${fnWrap}=function() ${code} end `
+               + `local ${okVar},${errVar}=pcall(${fnWrap}) `
+               + `if not ${okVar} then error(${errVar}) end `
+               + `end `
+      } else {
+        // Handlers falsos: junk puro que retorna inmediatamente
+        layer += `local ${handlers[i]}=function() ${generateJunk(5)} return nil end `
+      }
+    }
+
+    layer += `local ${DISPATCH}={`
+    for (let i = 0; i < handlers.length; i++) layer += `[${heavyMath(i+1)}]=${handlers[i]},`
+    layer += `} `
+
+    const execBlocks = []
+    for (let i = 0; i < handlers.length; i++) execBlocks.push(`${DISPATCH}[${heavyMath(i+1)}]()`)
+    layer += applyCFF(execBlocks)
+    code = layer
+  }
+  return code
+}
+
+// ─── Protecciones extra + anti-debug ──────────────────────────────────────────
+
+function getExtraProtections() {
+  const antiDebuggers =
+    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
+    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
+    `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end ` +
+    `if getmetatable(_G)~=nil then while true do end end ` +
+    `if type(print)~="function" then while true do end end `
+
+  const rawTampers = [
+    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
+    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
+    `if type(tostring)~="function" then _err() end`,
+    `if not string.match("chk","^c.*k$") then _err() end`,
+    `if type(coroutine.create)~="function" then _err() end`,
+    `if type(table.concat)~="function" then _err() end`,
+    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`,
+    `if math.abs(-10)~=10 then _err() end`,
+    `if gcinfo and gcinfo()<0 then _err() end`,
+    `if type(next)~="function" then _err() end`,
+    `if string.len("a")~=1 then _err() end`,
+    `if type(table.insert)~="function" then _err() end`,
+    `if string.byte("Z",1)~=90 then _err() end`,
+    `if math.floor(-1/10)~=-1 then _err() end`,
+    `if (true and 1 or 2)~=1 then _err() end`,
+    `if type(1)~="number" then _err() end`,
+    `if type(pcall)~="function" then _err() end`,
+    // Nuevos
+    `if select("#")~=0 then _err() end`,
+    `if type(ipairs)~="function" then _err() end`,
+    `if type(pairs)~="function" then _err() end`,
+    `if type(rawget)~="function" then _err() end`,
+    `if type(setmetatable)~="function" then _err() end`
+  ]
+
+  let guards = ""
+  for (const t of rawTampers) {
+    const fnName  = generateIlName()
+    const errName = generateIlName()
+    const injected = t.replace("_err()", `${errName}("!")`)
+    guards += `local ${fnName}=function() local ${errName}=error ${injected} end ${fnName}() `
+  }
+
+  return antiDebuggers + guards
+}
+
+// ─── Punto de entrada ─────────────────────────────────────────────────────────
+
+function obfuscate(sourceCode) {
+  if (!sourceCode) return '--ERROR'
+
+  const antiDebug =
+    `local _clk=os.clock local _t=_clk() for _=1,150000 do end ` +
+    `if os.clock()-_t>5.0 then while true do end end `
+
+  const extraProtections = getExtraProtections()
+
+  let payloadToProtect = ""
+  const isLoadstringRegex =
+    /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
+  const match = sourceCode.match(isLoadstringRegex)
+  if (match) payloadToProtect = match[1]
+  else payloadToProtect = detectAndApplyMappings(sourceCode)
+
+  // 1. 22 VMs reales profundas
+  const deepVM = build22xVM(payloadToProtect)
+
+  // 2. Capa decoy externa (lo que el analista ve primero)
+  const decoyWrapped = buildDecoyLayer(deepVM)
+
+  // 3. Junk + anti-debug + protecciones + código final
+  const result =
+    `${HEADER} ` +
+    `${generateJunk(70)} ` +
+    `${antiDebug} ` +
+    `${extraProtections} ` +
+    `${generateJunk(30)} ` +
+    `${decoyWrapped}`
+
+  return result.replace(/\s+/g, " ").trim()
+}
+
+module.exports = { obfuscate }
