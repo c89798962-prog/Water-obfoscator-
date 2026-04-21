@@ -4,7 +4,7 @@
 // ║  Runtime XOR key · 3 VM styles · sin dependencias   ║
 // ╚══════════════════════════════════════════════════════╝
 
-const HEADER = `--[[ protected by vvmer ]]`
+const HEADER = `--[[ this code its proyected by vmmer discord server:https://discord.gg/AAVKHtbxS ]]`
 
 // ── Name pools ───────────────────────────────────────────────
 const IL_POOL = [
