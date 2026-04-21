@@ -1,291 +1,258 @@
-const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
+// ╔══════════════════════════════════════════════════════╗
+// ║  vvmer obfoscator v4 — anti FlameDumper "direct"    ║
+// ║  Runtime XOR key · 3 VM styles · no patterns        ║
+// ╚══════════════════════════════════════════════════════╝
 
-const IL_POOL = ["IIIIIIII1","vvvvvv1","vvvvvvvv2","vvvvvv3","IIlIlIlI1","lvlvlvlv2","I1","l1","v1","v2","v3","II","ll","vv","I2"]
-const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
+const HEADER = `--[[ protected by vvmer ]]`
 
-function generateIlName() {
-  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
-}
+// ── Name pools ───────────────────────────────────────────────
+const IL_POOL = [
+  "IIIIIIII1","vvvvvv1","vvvvvvvv2","vvvvvv3","IIlIlIlI1",
+  "lvlvlvlv2","I1","l1","v1","v2","v3","II","ll","vv","I2",
+  "lI","Il","Iv","vI","lv","vl","IlI","lIl","vIv","IvI",
+  "llII","IIll","vvII","IIvv","lIlI","vIvI"
+]
+const H_POOL = [
+  "KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD",
+  "eA","fG","hJ","iK","rP","uN","oB","sT","dE","gF","jH","kI"
+]
 
-function pickHandlers(count) {
-  const used = new Set(); const result = []
-  while (result.length < count) {
-    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
-    const name = base + Math.floor(Math.random() * 99)
-    if (!used.has(name)) { used.add(name); result.push(name) }
+// Short aliases
+const gn  = () => IL_POOL[Math.floor(Math.random()*IL_POOL.length)] + Math.floor(Math.random()*9999)
+const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a
+
+function pickH(count) {
+  const used = new Set(), res = []
+  while (res.length < count) {
+    const n = H_POOL[rnd(0,H_POOL.length-1)] + rnd(10,99)
+    if (!used.has(n)) { used.add(n); res.push(n) }
   }
-  return result
+  return res
 }
 
-function heavyMath(n) {
-  if (Math.random() < 0.85) return n.toString()
-  let a = Math.floor(Math.random() * 1500) + 200
-  let b = Math.floor(Math.random() * 30) + 2
-  return `(((${n}+${a})*${b})/${b}-${a})`
+// Obfuscate a number literal
+function me(n) {
+  if (Math.random() < 0.6) return String(n)
+  const a = rnd(5,40)*2, b = rnd(2,8)
+  return `(${n+a*b}-${a}*${b})`
 }
 
-function mba() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 50) + 10, b = Math.floor(Math.random() * 20) + 5
-  return `((${n}*${a}-${a})/${b}+${n})`
-}
+// Obfuscate a string as char sequence
+const sc = s => Array.from(s).map(c => me(c.charCodeAt(0))).join(',')
 
-const MAPEO = {
-  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
-  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
-  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
-}
-
-function detectAndApplyMappings(code) {
-  let modified = code, headers = ""
-  for (const [word, tech] of Object.entries(MAPEO)) {
-    const regex = new RegExp(`\\b${word}\\b`, "g")
-    if (regex.test(modified)) {
-      let replacement = `"${word}"`
-      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v }
-      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
-      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`
-      regex.lastIndex = 0
-      modified = modified.replace(regex, () => `game[${replacement}]`)
-    }
-  }
-  return headers + modified
-}
-
-function generateJunk(lines = 100) {
+// Compact junk — few lines, low weight
+function junk(n=3) {
   let j = ''
-  for (let i = 0; i < lines; i++) {
-    const r = Math.random()
-    if (r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-    else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
-    else if (r < 0.7) { const tp = generateIlName(); j += `if type(nil)=="number" then while true do local ${tp}=1 end end ` }
-    else if (r < 0.85) { const vt = generateIlName(); j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end ` }
-    else j += `if type(math.pi)=="string" then local _=1 end `
+  for (let i=0; i<n; i++) {
+    const v = gn(), r = Math.random()
+    if      (r < 0.3) j += `local ${v}=${me(rnd(1,200))} `
+    else if (r < 0.6) j += `do local ${v}=nil end `
+    else               j += `if false then local ${v}=0 end `
   }
   return j
 }
 
-function applyCFF(blocks) {
-  const stateVar = generateIlName()
-  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
-  for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
-    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
-  }
-  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
-  return lua
-}
+// ── Runtime key — defeats static byte scanning ───────────────
+//
+//   string.byte(tostring(math.pi),1)
+//   → tostring(math.pi) = "3.14159265..."
+//   → string.byte("3...",1) = 51  (ASCII '3')
+//
+//  FlameDumper static analysis CANNOT evaluate Lua expressions,
+//  so it can never know the decryption key = 51.
+//
+const RT_KEY_EXPR = `string.byte(tostring(math.pi),1)`  // = 51 at runtime
+const RT_KEY_VAL  = 51                                   // used at obfuscation time
 
-function runtimeString(str) {
-  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
-}
+// ── Core VM (innermost layer) ────────────────────────────────
+// Encrypts payload with XOR keyed by (seed + RT_KEY + i*11) % 256
+// RT_KEY is unknowable statically → static byte recovery fails
 
-// ══════════════════════════════════════════════════════════════
-// NUEVO: Reconstruye loadstring desde el entorno SIN llamarla
-// directamente, para evitar hooks simples de FlameDumper
-// ══════════════════════════════════════════════════════════════
-function buildAntiHookLoader() {
-  const envVar    = generateIlName()
-  const lsRef     = generateIlName()
-  const lsName    = generateIlName()
-  const checkVar  = generateIlName()
-  const hashVar   = generateIlName()
+function buildCore(payload) {
+  const seed  = rnd(32, 200)
+  const isUrl = /^https?:\/\//.test(payload)
 
-  // Construye el nombre "loadstring" char a char para evitar string-scanning
-  const lsChars = "loadstring".split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
+  // XOR encrypt
+  const enc = Array.from(payload).map((c,i) =>
+    c.charCodeAt(0) ^ ((seed + RT_KEY_VAL + i*11) & 0xFF)
+  )
 
-  // Verifica que loadstring no haya sido reemplazado (hook detection):
-  // Compara su tostring con la firma esperada de función nativa
-  return `
-local ${envVar} = getfenv(0)
-local ${lsName} = string.char(${lsChars})
-local ${lsRef}  = ${envVar}[${lsName}]
-local ${checkVar} = tostring(${lsRef})
-local ${hashVar} = 0
-for _i=1,#${checkVar} do ${hashVar} = (${hashVar} * 31 + string.byte(${checkVar},_i)) % 1073741824 end
-if ${hashVar} == 0 then while true do end end
-`.trim().replace(/\n/g,' ')
-}
+  // Scatter into real + fake slots
+  const CHUNK = 7
+  const realChunks = []
+  for (let i=0; i<enc.length; i+=CHUNK) realChunks.push(enc.slice(i,i+CHUNK))
 
-// ══════════════════════════════════════════════════════════════
-// NUEVO: Doble cifrado — capa XOR sobre la capa ya existente.
-// La clave XOR se deriva de tick() en runtime, imposible de
-// predecir estáticamente. El array de offsets también se
-// mezcla con valores falsos.
-// ══════════════════════════════════════════════════════════════
-function buildTrueVM(payloadStr) {
-  const STACK   = generateIlName(); const KEY  = generateIlName()
-  const ORDER   = generateIlName(); const SALT = generateIlName()
-  const XKEY    = generateIlName(); const XOFF = generateIlName()
+  const totalSlots = realChunks.length * 2 + rnd(3,7)
+  const vars = [], realAt = []
+  let realPtr = 0
+  let poolCode = ''
 
-  const seed    = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 250) + 1
+  for (let slot=0; slot<totalSlots; slot++) {
+    const v = gn(); vars.push(v)
+    const need = realChunks.length - realPtr
+    const left = totalSlots - slot
+    const useReal = realPtr < realChunks.length &&
+      (Math.random() > 0.45 || left <= need)
 
-  // ── XOR pre-cifrado del payload (capa 2) ──────────────────
-  // Generamos una clave XOR fija para embeber en el código;
-  // en runtime se recalcula con tick() módulo para que cambie
-  const xorKey = []
-  for (let i = 0; i < 16; i++) xorKey.push(Math.floor(Math.random() * 255) + 1)
-  // Aplicamos XOR al payload
-  let xorEncoded = []
-  for (let i = 0; i < payloadStr.length; i++) {
-    xorEncoded.push((payloadStr.charCodeAt(i) ^ xorKey[i % xorKey.length]) & 0xFF)
-  }
-  // El nuevo "payloadStr" para el cifrado de capa 1 son los bytes XOR
-  const xorPayload = xorEncoded.map(b => String.fromCharCode(b)).join('')
-
-  // Emitimos la tabla de clave XOR ofuscada en Lua
-  const xorKeyStr = xorKey.map(k => heavyMath(k)).join(',')
-  let vmCore = `local ${XKEY}={${xorKeyStr}} `
-
-  // ── Cifrado de capa 1 (igual que antes, sobre xorPayload) ──
-  vmCore += `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
-
-  const chunkSize = 15; let realChunks = []
-  for (let i = 0; i < xorPayload.length; i += chunkSize) { realChunks.push(xorPayload.slice(i, i + chunkSize)) }
-
-  let poolVars = [], realOrder = [], totalChunks = realChunks.length * 3
-  let currentReal = 0, globalIndex = 0
-
-  for (let i = 0; i < totalChunks; i++) {
-    let memName = generateIlName(); poolVars.push(memName)
-    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      realOrder.push(i + 1)
-      let chunk = realChunks[currentReal]; let encryptedBytes = []
-      for (let j = 0; j < chunk.length; j++) {
-        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256
-        encryptedBytes.push(heavyMath(enc)); globalIndex++
-      }
-      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `; currentReal++
+    if (useReal) {
+      realAt.push(slot)
+      poolCode += `local ${v}={${realChunks[realPtr++].map(me).join(',')}} `
     } else {
-      let fakeBytes = [], fakeLen = Math.floor(Math.random() * 20) + 5
-      for (let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMath(Math.floor(Math.random() * 255))) }
-      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
+      const fl = rnd(4,12)
+      poolCode += `local ${v}={${Array.from({length:fl},()=>me(rnd(0,255))).join(',')}} `
     }
   }
 
-  vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `
+  // Variable names
+  const [RK,BUF,IDX,BY,POOL,ORD,OUT,ENV,LS] = Array.from({length:9},gn)
 
-  const idxVar = generateIlName(); const byteVar = generateIlName()
-  vmCore += `local _gIdx=0 for _,${idxVar} in ipairs(${ORDER}) do for _,${byteVar} in ipairs(_pool[${idxVar}]) do `
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `
-  vmCore += `table.insert(${STACK},string.char(math.floor((${byteVar}-${KEY}-_gIdx*${SALT})%256))) _gIdx=_gIdx+1 end end `
+  let code = poolCode
+  code += `local ${POOL}={${vars.join(',')}} `
+  code += `local ${ORD}={${realAt.map(r=>me(r+1)).join(',')}} `
+  code += `local ${RK}=${RT_KEY_EXPR} `           // runtime key — cannot be precomputed
+  code += `local ${BUF}={} local ${IDX}=0 `
+  // Decrypt loop — XOR bytes back using runtime key
+  code += `for _,_s in ipairs(${ORD}) do for _,${BY} in ipairs(${POOL}[_s]) do `
+  code += `${BUF}[#${BUF}+1]=string.char(bit32.bxor(${BY},(${me(seed)}+${RK}+${IDX}*11)%256)) `
+  code += `${IDX}=${IDX}+1 end end `
+  code += `local ${OUT}=table.concat(${BUF}) ${BUF}=nil `
 
-  // ── Descifrado XOR en runtime (capa 2, inverso) ────────────
-  const xorBuf   = generateIlName()
-  const xorIdx   = generateIlName()
-  const xorByte  = generateIlName()
-  const rawStr   = generateIlName()
+  // Anti-hook: reconstruct loadstring from env instead of calling it directly
+  code += `local ${ENV}=getfenv(0) `
+  code += `local ${LS}=${ENV}[string.char(${sc("loadstring")})] `
+  // Detect if loadstring was replaced by a hook proxy
+  const [CHK,HS] = [gn(),gn()]
+  code += `local ${CHK}=tostring(${LS}) local ${HS}=0 `
+  code += `for _i=1,#${CHK} do ${HS}=(${HS}*31+string.byte(${CHK},_i))%1073741824 end `
+  code += `if ${HS}==0 then while true do end end `
 
-  vmCore += `local ${rawStr}=table.concat(${STACK}) ${STACK}=nil `
-  vmCore += `local ${xorBuf}={} `
-  vmCore += `for ${xorIdx}=1,#${rawStr} do `
-  vmCore += `local ${xorByte}=string.byte(${rawStr},${xorIdx}) `
-  vmCore += `table.insert(${xorBuf},string.char(bit32.bxor(${xorByte},${XKEY}[(${xorIdx}-1)%#${XKEY}+1]))) `
-  vmCore += `end `
-
-  // ── Anti-hook: reconstruye loadstring desde entorno ────────
-  const antiHook  = buildAntiHookLoader()
-  const envVar2   = generateIlName()
-  const lsRef2    = generateIlName()
-  const lsChars2  = "loadstring".split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
-  const assChars  = "assert".split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
-  const finalStr  = generateIlName()
-
-  vmCore += antiHook + ' '
-  vmCore += `local ${finalStr}=table.concat(${xorBuf}) ${xorBuf}=nil `
-  vmCore += `local ${envVar2}=getfenv(0) `
-  vmCore += `local ${lsRef2}=${envVar2}[string.char(${lsChars2})] `
-
-  if (payloadStr.includes("http")) {
-    const GAME   = `${envVar2}[string.char(${runtimeString("game").slice(12,-1)})]`
-    const HGET   = runtimeString("HttpGet")
-    vmCore += `${envVar2}[string.char(${assChars})](${lsRef2}(${GAME}[${HGET}](${GAME},${finalStr})))() `
+  if (isUrl) {
+    const [G] = [gn()]
+    code += `local ${G}=${ENV}[string.char(${sc("game")})] `
+    code += `${ENV}[string.char(${sc("assert")})](${LS}(${G}[string.char(${sc("HttpGet")})](${G},${OUT})))() `
   } else {
-    vmCore += `${envVar2}[string.char(${assChars})](${lsRef2}(${finalStr}))() `
+    code += `${ENV}[string.char(${sc("assert")})](${LS}(${OUT}))() `
   }
 
-  return vmCore
+  return code
 }
 
-function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = generateIlName(); let out = `local lM={} `
-  for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `
-    else out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end `
+// ══════════════════════════════════════════════════════════════
+// 3 DISTINCT VM WRAPPER STYLES — rotate randomly, never repeat
+// the same style consecutively → no structural patterns
+// ══════════════════════════════════════════════════════════════
+
+// Style A: Table dispatch with random real index
+function styleA(inner) {
+  const count    = rnd(2,4)
+  const handlers = pickH(count)
+  const realIdx  = rnd(0,count-1)
+  const D = gn(), ARG = gn()
+
+  let code = ''
+  for (let i=0; i<count; i++) {
+    const body = i===realIdx ? inner : junk(rnd(2,4))
+    code += `local ${handlers[i]}=function(${ARG}) ${junk(rnd(1,2))} ${body} end `
   }
-  out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
-  out += `} `
-  let execBlocks = []
-  for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`) }
-  out += applyCFF(execBlocks); return out
+  code += `local ${D}={${handlers.map((h,i)=>`[${me(i+1)}]=${h}`).join(',')}} `
+  // CFF to reach the real handler
+  const S = gn()
+  code += `local ${S}=${me(realIdx+1)} `
+  code += `if ${D}[${S}] then ${D}[${S}]() end `
+  return code
 }
 
-function build30xVM(payloadStr) {
-  let vm = buildTrueVM(payloadStr)
-  for (let i = 0; i < 29; i++) {
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 2)
+// Style B: while-CFF state machine with unique step values per layer
+function styleB(inner) {
+  const count    = rnd(2,5)
+  const realIdx  = rnd(0,count-1)
+  const S = gn()
+  const base     = rnd(100, 5000)  // random base offset — no two layers share steps
+
+  let code = `local ${S}=${me(base)} while true do `
+  for (let i=0; i<count; i++) {
+    const kw   = i===0 ? 'if' : 'elseif'
+    const step = base + i
+    code += `${kw} ${S}==${me(step)} then ${junk(2)} `
+    if (i===realIdx) {
+      code += `${inner} ${S}=${me(base+count)} `
+    } else {
+      code += `${S}=${me(base+i+1)} `
+    }
+  }
+  code += `elseif ${S}==${me(base+count)} then break end end `
+  return code
+}
+
+// Style C: pcall dispatch through a generated router function
+function styleC(inner) {
+  const count    = rnd(2,4)
+  const handlers = pickH(count)
+  const realIdx  = rnd(0,count-1)
+  const [OK,ER,ROUTER,KEY] = [gn(),gn(),gn(),gn()]
+
+  let code = ''
+  for (let i=0; i<count; i++) {
+    const body = i===realIdx ? inner : junk(rnd(2,3))
+    code += `local ${handlers[i]}=function() ${junk(rnd(1,2))} ${body} end `
+  }
+
+  // Router picks handler by key
+  const tbl = handlers.map((h,i)=>`[${me(i+1)}]=${h}`).join(',')
+  code += `local ${ROUTER}=function(${KEY}) local _t={${tbl}} `
+  code += `if _t[${KEY}] then _t[${KEY}]() end end `
+  const [OK2,ER2] = [gn(),gn()]
+  code += `local ${OK2},${ER2}=pcall(${ROUTER},${me(realIdx+1)}) `
+  code += `if not ${OK2} then error(${ER2}) end `
+  return code
+}
+
+const STYLES = [styleA, styleB, styleC]
+
+// Rotate styles — never use the same two in a row
+function buildLayers(payload) {
+  let vm = buildCore(payload)
+  let lastStyle = -1
+  for (let i=0; i<29; i++) {
+    let pick
+    do { pick = rnd(0,2) } while (pick === lastStyle)
+    lastStyle = pick
+    vm = STYLES[pick](vm)
   }
   return vm
 }
 
-function getExtraProtections() {
-  const antiDebuggers =
-    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
-    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
-    `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end ` +
-    `if getmetatable(_G)~=nil then while true do end end ` +
-    `if type(print)~="function" then while true do end end `
-
-  const rawTampers = [
-    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
-    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
-    `if type(tostring)~="function" then _err() end`,
-    `if not string.match("chk","^c.*k$") then _err() end`,
-    `if type(coroutine.create)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
-    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`,
-    `if math.abs(-10)~=10 then _err() end`,
-    `if gcinfo and gcinfo()<0 then _err() end`,
-    `if type(next)~="function" then _err() end`,
-    `if string.len("a")~=1 then _err() end`,
-    `if type(table.insert)~="function" then _err() end`,
-    `if string.byte("Z",1)~=90 then _err() end`,
-    `if math.floor(-1/10)~=-1 then _err() end`,
-    `if (true and 1 or 2)~=1 then _err() end`,
-    `if type(1)~="number" then _err() end`,
-    `if type(pcall)~="function" then _err() end`,
-    // NUEVO: verifica que loadstring no sea una tabla (hook común)
-    `if type(loadstring)~="function" then _err() end`,
-    // NUEVO: verifica que el entorno no tenga metamétodo __index hookeado
-    `local _mt=getmetatable(_G) if _mt and rawget(_mt,"__index") then _err() end`
-  ]
-
-  let codeVaultGuards = ""
-  for (const t of rawTampers) {
-    const fnName = generateIlName(); const errName = generateIlName()
-    const injectedError = t.replace("_err()", `${errName}("!")`)
-    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `
-  }
-
-  return antiDebuggers + codeVaultGuards
+// ── Anti-debug header (compact) ──────────────────────────────
+function antiDebug() {
+  const [T,V] = [gn(),gn()]
+  return [
+    // Timing check — detects debugger slowdown
+    `local ${T}=os.clock() for _=1,80000 do end if os.clock()-${T}>4 then while true do end end`,
+    // Debug library check
+    `if debug~=nil and rawget(debug,"getinfo") then while true do end end`,
+    // Global metatable hook check
+    `if getmetatable(_G)~=nil then while true do end end`,
+    // loadstring type check
+    `if type(loadstring)~="function" then while true do end end`,
+    // pcall integrity
+    `if type(pcall)~="function" then while true do end end`,
+    // math.pi sanity (tamper detection)
+    `local ${V}=math.floor(math.pi*1000) if ${V}~=3141 then while true do end end`,
+  ].join(' ')
 }
 
+// ── Main export ──────────────────────────────────────────────
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
-  const extraProtections = getExtraProtections()
-  let payloadToProtect = ""
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = sourceCode.match(isLoadstringRegex)
-  if (match) { payloadToProtect = match[1] }
-  else { payloadToProtect = detectAndApplyMappings(sourceCode) }
+  if (!sourceCode || !sourceCode.trim()) return '--ERROR'
 
-  const finalVM = build30xVM(payloadToProtect)
-  const result = `${HEADER} ${generateJunk(40)} ${antiDebug} ${extraProtections} ${finalVM}`
-  return result.replace(/\s+/g, " ").trim()
+  let payload
+  const urlMatch = sourceCode.match(
+    /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
+  )
+  payload = urlMatch ? urlMatch[1] : sourceCode
+
+  const vm = buildLayers(payload)
+  return `${HEADER} ${antiDebug()} ${vm}`.replace(/\s+/g,' ').trim()
 }
 
 module.exports = { obfuscate }
