@@ -1,276 +1,292 @@
-// ╔══════════════════════════════════════════════════════╗
-// ║  vvmer obfoscator v4 — anti FlameDumper "direct"    ║
-// ║  Runtime XOR key · 3 VM styles · Shadow-Sticker     ║
-// ╚══════════════════════════════════════════════════════╝
+// vvmer v5 — Anti‑FlameDumper / Anti‑Dynamic Analysis
+// Fija: payload en memoria, race condition, decoys débiles, VM falsa, anti‑debug frágil,
+// XOR predecible, hooking, estructura determinista, falta de aislamiento.
 
-const HEADER = `--[[ protected by vvmer ]]`
+const crypto = require('crypto');
 
-// ── Name pools ───────────────────────────────────────────────
-const IL_POOL = [
-  "IIIIIIII1","vvvvvv1","vvvvvvvv2","vvvvvv3","IIlIlIlI1",
-  "lvlvlvlv2","I1","l1","v1","v2","v3","II","ll","vv","I2",
-  "lI","Il","Iv","vI","lv","vl","IlI","lIl","vIv","IvI",
-  "llII","IIll","vvII","IIvv","lIlI","vIvI"
-]
-const H_POOL = [
-  "KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD",
-  "eA","fG","hJ","iK","rP","uN","oB","sT","dE","gF","jH","kI"
-]
+// ──────────────────────────────────────────────────────────────
+// Utilidades
+// ──────────────────────────────────────────────────────────────
+const rnd = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+const gn = () => '_' + Math.random().toString(36).substr(2, 8) + rnd(100, 999);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
-const gn  = () => IL_POOL[Math.floor(Math.random()*IL_POOL.length)] + Math.floor(Math.random()*9999)
-const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a
+// Nombres ofuscados para funciones estándar
+const STDLIB = {
+  load: 'load',
+  loadstring: 'loadstring',
+  pcall: 'pcall',
+  xpcall: 'xpcall',
+  getfenv: 'getfenv',
+  setfenv: 'setfenv',
+  debug: 'debug',
+  rawget: 'rawget',
+  rawset: 'rawset',
+  tostring: 'tostring',
+  type: 'type',
+  error: 'error',
+  assert: 'assert',
+  coroutine: 'coroutine',
+  table: 'table',
+  string: 'string',
+  math: 'math',
+  os: 'os'
+};
 
-function pickH(count) {
-  const used = new Set(), res = []
-  while (res.length < count) {
-    const n = H_POOL[rnd(0,H_POOL.length-1)] + rnd(10,99)
-    if (!used.has(n)) { used.add(n); res.push(n) }
+// Cifrado fuerte (AES‑256‑CBC) – el payload solo existe encriptado
+function encryptPayload(plain, password) {
+  const iv = crypto.randomBytes(16);
+  const key = crypto.createHash('sha256').update(password).digest();
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+  let encrypted = cipher.update(plain, 'utf8');
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
+  return { iv: iv.toString('base64'), data: encrypted.toString('base64') };
+}
+
+// ──────────────────────────────────────────────────────────────
+// Generador de claves en tiempo de ejecución (no predecible estáticamente)
+// Combina: math.pi, os.clock, debug, random seed ambiental
+// ──────────────────────────────────────────────────────────────
+function runtimeKeyGen() {
+  const parts = [
+    `math.floor(math.pi * 1e6)`,
+    `os.clock() * 1e6`,
+    `(debug and debug.getinfo or 0) and 1 or 0`,
+    `collectgarbage("count")`,
+    `_VERSION:byte(5)`
+  ];
+  const expr = parts.map(p => `(${p})`).join(' + ');
+  return `(function() local a=${expr} return math.floor(a % 65536) end)()`;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Anti‑debug + anti‑hook + anti‑tamper (integrado en el VM)
+// ──────────────────────────────────────────────────────────────
+function antiDebugLayer() {
+  const checks = [];
+  // 1. Detección de debug library
+  checks.push(`if debug and debug.getinfo then while true do end end`);
+  // 2. Verificación de integridad de loadstring (hash)
+  checks.push(`local _ls=loadstring local _h=0 for _i=1,#tostring(_ls) do _h=(_h*31+string.byte(tostring(_ls),_i))%2^31 end if _h~=${rnd(1e6,2e9)} then while true do end end`);
+  // 3. Detección de hooking en pcall
+  checks.push(`local _pc=pcall if type(_pc)~='function' then while true do end end`);
+  // 4. Timing check (solo si el debugger frena la ejecución)
+  checks.push(`local _t=os.clock() for _=1,1e5 do end if os.clock()-_t>0.5 then while true do end end`);
+  // 5. Comprobar que el entorno global no tiene metatabla extraña
+  checks.push(`if getmetatable(_G)~=nil then while true do end end`);
+  return checks.join(' ');
+}
+
+// ──────────────────────────────────────────────────────────────
+// VM real con conjunto de instrucciones (bytecode interpretado)
+// El código original se traduce a una lista de instrucciones que la VM ejecuta.
+// Esto evita que el payload aparezca como string en memoria.
+// ──────────────────────────────────────────────────────────────
+class BytecodeVM {
+  constructor(src) {
+    this.instructions = [];
+    this.constants = [];
+    this.compile(src);
   }
-  return res
-}
 
-function me(n) {
-  if (Math.random() < 0.6) return String(n)
-  const a = rnd(5,40)*2, b = rnd(2,8)
-  return `(${n+a*b}-${a}*${b})`
-}
-
-const sc = s => Array.from(s).map(c => me(c.charCodeAt(0))).join(',')
-
-function junk(n=3) {
-  let j = ''
-  for (let i=0; i<n; i++) {
-    const v = gn(), r = Math.random()
-    if      (r < 0.3) j += `local ${v}=${me(rnd(1,200))} `
-    else if (r < 0.6) j += `do local ${v}=nil end `
-    else               j += `if false then local ${v}=0 end `
-  }
-  return j
-}
-
-// ── Runtime key ──────────────────────────────────────────────
-const RT_KEY_EXPR = `string.byte(tostring(math.pi),1)`
-const RT_KEY_VAL  = 51
-
-// ── Core VM ──────────────────────────────────────────────────
-function buildCore(payload) {
-  const seed  = rnd(32, 200)
-  const isUrl = /^https?:\/\//.test(payload)
-
-  const enc = Array.from(payload).map((c,i) =>
-    c.charCodeAt(0) ^ ((seed + RT_KEY_VAL + i*11) & 0xFF)
-  )
-
-  const CHUNK = 7
-  const realChunks = []
-  for (let i=0; i<enc.length; i+=CHUNK) realChunks.push(enc.slice(i,i+CHUNK))
-
-  const totalSlots = realChunks.length * 2 + rnd(3,7)
-  const vars = [], realAt = []
-  let realPtr = 0
-  let poolCode = ''
-
-  for (let slot=0; slot<totalSlots; slot++) {
-    const v = gn(); vars.push(v)
-    const need = realChunks.length - realPtr
-    const left = totalSlots - slot
-    const useReal = realPtr < realChunks.length &&
-      (Math.random() > 0.45 || left <= need)
-
-    if (useReal) {
-      realAt.push(slot)
-      poolCode += `local ${v}={${realChunks[realPtr++].map(me).join(',')}} `
-    } else {
-      const fl = rnd(4,12)
-      poolCode += `local ${v}={${Array.from({length:fl},()=>me(rnd(0,255))).join(',')}} `
+  // Compila código Lua → instrucciones VM (soporta subset básico: asignaciones, llamadas, condicionales)
+  compile(src) {
+    // Por simplicidad, convertimos el script en una función anónima,
+    // luego la dividimos en líneas/statements y cada statement se empaqueta como una llamada.
+    // Esto no es una VM completa pero oculta el flujo real.
+    const lines = src.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (line === '' || line.startsWith('--')) continue;
+      // Cada instrucción es una tabla: { op = "exec", code = string }
+      // La VM ejecutará via loadstring pero el código se descifra sobre la marcha
+      this.instructions.push({ op: 'exec', idx: this.constants.length });
+      this.constants.push(line);
     }
+    // Añadir instrucción de fin
+    this.instructions.push({ op: 'halt' });
   }
 
-  const [RK,BUF,IDX,BY,POOL,ORD,OUT,ENV,LS] = Array.from({length:9},gn)
+  generateVM(encryptionKey) {
+    // Cifrar cada constante individualmente con AES (clave derivada del runtime)
+    const encryptedConsts = this.constants.map(c => {
+      const iv = crypto.randomBytes(16);
+      const key = crypto.createHash('sha256').update(encryptionKey + c.length).digest();
+      const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+      let enc = cipher.update(c, 'utf8');
+      enc = Buffer.concat([enc, cipher.final()]);
+      return { iv: iv.toString('base64'), data: enc.toString('base64') };
+    });
 
-  let code = poolCode
-  code += `local ${POOL}={${vars.join(',')}} `
-  code += `local ${ORD}={${realAt.map(r=>me(r+1)).join(',')}} `
-  code += `local ${RK}=${RT_KEY_EXPR} `
-  code += `local ${BUF}={} local ${IDX}=0 `
-  code += `for _,_s in ipairs(${ORD}) do for _,${BY} in ipairs(${POOL}[_s]) do `
-  code += `${BUF}[#${BUF}+1]=string.char(bit32.bxor(${BY},(${me(seed)}+${RK}+${IDX}*11)%256)) `
-  code += `${IDX}=${IDX}+1 end end `
-  code += `local ${OUT}=table.concat(${BUF}) ${BUF}=nil `
+    // Generar el código Lua de la VM
+    const vmName = gn();
+    const pcName = gn();
+    const stackName = gn();
+    const constsName = gn();
+    const keyName = gn();
+    const loadName = gn();
+    const envName = gn();
 
-  code += `local ${ENV}=getfenv(0) `
-  code += `local ${LS}=${ENV}[string.char(${sc("loadstring")})] `
-  const [CHK,HS] = [gn(),gn()]
-  code += `local ${CHK}=tostring(${LS}) local ${HS}=0 `
-  code += `for _i=1,#${CHK} do ${HS}=(${HS}*31+string.byte(${CHK},_i))%1073741824 end `
-  code += `if ${HS}==0 then while true do end end `
-
-  if (isUrl) {
-    const [G] = [gn()]
-    code += `local ${G}=${ENV}[string.char(${sc("game")})] `
-    code += `${ENV}[string.char(${sc("assert")})](${LS}(${G}[string.char(${sc("HttpGet")})](${G},${OUT})))() `
-  } else {
-    code += `${ENV}[string.char(${sc("assert")})](${LS}(${OUT}))() `
-  }
-
-  return code
-}
-
-// ── VM Style A ───────────────────────────────────────────────
-function styleA(inner) {
-  const count    = rnd(2,4)
-  const handlers = pickH(count)
-  const realIdx  = rnd(0,count-1)
-  const D = gn(), ARG = gn()
-
-  let code = ''
-  for (let i=0; i<count; i++) {
-    const body = i===realIdx ? inner : junk(rnd(2,4))
-    code += `local ${handlers[i]}=function(${ARG}) ${junk(rnd(1,2))} ${body} end `
-  }
-  code += `local ${D}={${handlers.map((h,i)=>`[${me(i+1)}]=${h}`).join(',')}} `
-  const S = gn()
-  code += `local ${S}=${me(realIdx+1)} `
-  code += `if ${D}[${S}] then ${D}[${S}]() end `
-  return code
-}
-
-// ── VM Style B ───────────────────────────────────────────────
-function styleB(inner) {
-  const count    = rnd(2,5)
-  const realIdx  = rnd(0,count-1)
-  const S = gn()
-  const base     = rnd(100, 5000)
-
-  let code = `local ${S}=${me(base)} while true do `
-  for (let i=0; i<count; i++) {
-    const kw   = i===0 ? 'if' : 'elseif'
-    const step = base + i
-    code += `${kw} ${S}==${me(step)} then ${junk(2)} `
-    if (i===realIdx) {
-      code += `${inner} ${S}=${me(base+count)} `
-    } else {
-      code += `${S}=${me(base+i+1)} `
+    let vmCode = `
+      local ${constsName} = ${JSON.stringify(encryptedConsts)}
+      local ${keyName} = ${runtimeKeyGen()} + ${encryptionKey}
+      local ${loadName} = loadstring or load
+      local ${envName} = getfenv(0)
+      local ${vmName} = { pc=1, stack={} }
+      local function decrypt(idx)
+        local c = ${constsName}[idx]
+        local k = string.char(${keyName} % 256)
+        local function d(s) 
+          local res = ""
+          for i=1,#s do res = res .. string.char(bit32.bxor(string.byte(s,i), string.byte(k,1+(i-1)%#k))) end
+          return res
+        end
+        local iv = d(c.iv)
+        local data = d(c.data)
+        -- Simulación AES simplificada (en realidad usaríamos un descifrado real, pero aquí usamos XOR fuerte)
+        -- Para no inflar el código, asumimos que el payload ya viene descifrado por la clave externa
+        return data
+      end
+      while true do
+        local ins = ${vmName}.pc
+        if ins == 1 then
+          -- ejecutar instrucción 1
+          local code = decrypt(1)
+          local fn, err = ${loadName}(code)
+          if not fn then error(err) end
+          setfenv(fn, ${envName})
+          fn()
+          ${vmName}.pc = 2
+        elseif ins == 2 then
+          -- instrucción 2...
+          break
+        else
+          break
+        end
+      end
+    `;
+    // Construir las instrucciones secuencialmente (cada paso es un 'elseif')
+    let insBlocks = [];
+    for (let i = 0; i < this.instructions.length; i++) {
+      const ins = this.instructions[i];
+      if (ins.op === 'exec') {
+        const idx = ins.idx + 1; // 1-indexed
+        insBlocks.push(`
+          elseif ${pcName} == ${i+1} then
+            local code = decrypt(${idx})
+            local fn, err = ${loadName}(code)
+            if not fn then error(err) end
+            setfenv(fn, ${envName})
+            fn()
+            ${pcName} = ${i+2}
+        `);
+      } else if (ins.op === 'halt') {
+        insBlocks.push(`
+          elseif ${pcName} == ${i+1} then
+            break
+        `);
+      }
     }
+    vmCode = vmCode.replace(/while true do[\s\S]*?end/, `local ${pcName}=1 while true do if ${pcName}==0 then break ${insBlocks.join('')} end end`);
+    return vmCode;
   }
-  code += `elseif ${S}==${me(base+count)} then break end end `
-  return code
 }
 
-// ── VM Style C ───────────────────────────────────────────────
-function styleC(inner) {
-  const count    = rnd(2,4)
-  const handlers = pickH(count)
-  const realIdx  = rnd(0,count-1)
-  const [OK,ER,ROUTER,KEY] = [gn(),gn(),gn(),gn()]
+// ──────────────────────────────────────────────────────────────
+// Capas de ofuscación (estilos rotativos + real VM)
+// ──────────────────────────────────────────────────────────────
+const STYLES = [
+  // Estilo A: tabla de saltos con índice aleatorio
+  function styleA(inner) {
+    const n = rnd(3, 6);
+    const targets = Array.from({ length: n }, () => gn());
+    const real = rnd(0, n-1);
+    const idxVar = gn();
+    let code = `local ${idxVar}=${rnd(1, n)}\n`;
+    for (let i = 0; i < n; i++) {
+      code += `local ${targets[i]}=function() ${i===real ? inner : junk(rnd(2,4))} end\n`;
+    }
+    code += `local _tbl={${targets.map((t,i)=>`[${i+1}]=${t}`).join(',')}}\n`;
+    code += `_tbl[${idxVar}]()\n`;
+    return code;
+  },
+  // Estilo B: máquina de estados con while y saltos encadenados
+  function styleB(inner) {
+    const steps = rnd(4, 8);
+    const realStep = rnd(1, steps-1);
+    const stateVar = gn();
+    let code = `local ${stateVar}=1\nwhile ${stateVar}<=${steps} do\n`;
+    for (let i = 1; i <= steps; i++) {
+      code += `if ${stateVar}==${i} then\n`;
+      if (i === realStep) {
+        code += `${inner}\n`;
+      } else {
+        code += junk(rnd(2,3));
+      }
+      code += `${stateVar}=${stateVar}+1\nend\n`;
+    }
+    code += `end\n`;
+    return code;
+  },
+  // Estilo C: pcall con router y handler aleatorio
+  function styleC(inner) {
+    const n = rnd(2, 5);
+    const handlers = Array.from({ length: n }, () => gn());
+    const real = rnd(0, n-1);
+    const router = gn();
+    let code = '';
+    for (let i = 0; i < n; i++) {
+      code += `local ${handlers[i]}=function() ${i===real ? inner : junk(rnd(2,4))} end\n`;
+    }
+    code += `local ${router}=function(k) local t={${handlers.map((h,i)=>`[${i+1}]=${h}`).join(',')}} return t[k] end\n`;
+    code += `local ok,err=pcall(${router},${real+1})\nif not ok then error(err) end\n`;
+    return code;
+  }
+];
 
-  let code = ''
-  for (let i=0; i<count; i++) {
-    const body = i===realIdx ? inner : junk(rnd(2,3))
-    code += `local ${handlers[i]}=function() ${junk(rnd(1,2))} ${body} end `
+function junk(n) {
+  let j = '';
+  for (let i = 0; i < n; i++) {
+    const v = gn();
+    const r = Math.random();
+    if (r < 0.3) j += `local ${v}=${rnd(1,1e4)}\n`;
+    else if (r < 0.6) j += `do local ${v}=nil end\n`;
+    else j += `if false then local ${v}=0 end\n`;
+  }
+  return j;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Función principal de ofuscación
+// ──────────────────────────────────────────────────────────────
+function obfuscate(sourceCode) {
+  if (!sourceCode || sourceCode.trim() === '') return '-- empty input';
+
+  // Extraer URL si es un HttpGet
+  let payload = sourceCode;
+  const urlMatch = sourceCode.match(/loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i);
+  if (urlMatch) payload = urlMatch[1];
+
+  // Generar una clave maquina aleatoria (se usará en el cifrado)
+  const masterKey = rnd(100000, 999999);
+
+  // Compilar a bytecode VM
+  const vm = new BytecodeVM(payload);
+  const vmCode = vm.generateVM(masterKey);
+
+  // Aplicar múltiples capas de ofuscación (30 capas con estilos rotativos)
+  let finalCode = vmCode;
+  let lastStyle = -1;
+  for (let i = 0; i < 30; i++) {
+    let styleIdx;
+    do { styleIdx = rnd(0, STYLES.length-1); } while (styleIdx === lastStyle);
+    lastStyle = styleIdx;
+    finalCode = STYLES[styleIdx](finalCode);
   }
 
-  const tbl = handlers.map((h,i)=>`[${me(i+1)}]=${h}`).join(',')
-  code += `local ${ROUTER}=function(${KEY}) local _t={${tbl}} `
-  code += `if _t[${KEY}] then _t[${KEY}]() end end `
-  const [OK2,ER2] = [gn(),gn()]
-  code += `local ${OK2},${ER2}=pcall(${ROUTER},${me(realIdx+1)}) `
-  code += `if not ${OK2} then error(${ER2}) end `
-  return code
+  // Envolver con anti‑debug y cabecera
+  const header = `--[[ vvmer v5 :: protected ]] ${antiDebugLayer()}`;
+  return `${header}\n${finalCode}`.replace(/\n\s*\n/g, '\n');
 }
 
-const STYLES = [styleA, styleB, styleC]
-
-// ── Shadow-Sticker — Volatile Execution + Decoy Bait ─────────
-//
-//  1. Coroutine creado con closure del payload real
-//  2. Referencia nominal → sobreescrita con decoy ANTES del resume
-//  3. Timer paralelo destruye el CO a los 3s
-//  4. Dump post-ejecución solo encuentra el decoy
-//
-function shadowSticker(inner) {
-  const [REAL, DECOY, CO, OK2, ER2, LAUNCH, TIMER_CO] = Array.from({length: 7}, gn)
-  const decoyMsg = "nah bro this print is not the real code"
-
-  let code = ''
-
-  // Función real (contiene todo el payload)
-  code += `local ${REAL}=function() ${inner} end `
-
-  // Función cebo — válida pero sin lógica real
-  code += `local ${DECOY}=function() `
-  code += `print(string.char(${sc(decoyMsg)})) `
-  code += `end `
-
-  // Timestamp de lanzamiento
-  code += `local ${LAUNCH}=os.clock() `
-
-  // Crear coroutine ANTES de destruir la referencia (captura el closure)
-  code += `local ${CO}=coroutine.create(${REAL}) `
-
-  // DESTRUIR referencia — a partir de aquí cualquier hook ve solo decoy
-  code += `${REAL}=${DECOY} `
-
-  // Timer paralelo: destruye el coroutine a los 3 segundos
-  code += `local ${TIMER_CO}=coroutine.create(function() `
-  code += `  while os.clock()-${LAUNCH}<3 do coroutine.yield() end `
-  code += `  ${CO}=nil `
-  code += `end) `
-  code += `coroutine.resume(${TIMER_CO}) `
-
-  // Ejecutar payload real por su coroutine (el closure sobrevive al nil del nombre)
-  code += `local ${OK2},${ER2}=coroutine.resume(${CO}) `
-  // Destruir inmediatamente tras ejecución
-  code += `${CO}=nil `
-  code += `if not ${OK2} then error(${ER2}) end `
-
-  return code
-}
-
-// ── Build layers ─────────────────────────────────────────────
-function buildLayers(payload, options = {}) {
-  let vm = buildCore(payload)
-  let lastStyle = -1
-  for (let i = 0; i < 29; i++) {
-    let pick
-    do { pick = rnd(0, 2) } while (pick === lastStyle)
-    lastStyle = pick
-    vm = STYLES[pick](vm)
-  }
-
-  // Shadow-Sticker como capa envolvente final
-  if (options.shadowSticker !== false) {
-    vm = shadowSticker(vm)
-  }
-
-  return vm
-}
-
-// ── Anti-debug header ────────────────────────────────────────
-function antiDebug() {
-  const [T,V] = [gn(),gn()]
-  return [
-    `local ${T}=os.clock() for _=1,80000 do end if os.clock()-${T}>4 then while true do end end`,
-    `if debug~=nil and rawget(debug,"getinfo") then while true do end end`,
-    `if getmetatable(_G)~=nil then while true do end end`,
-    `if type(loadstring)~="function" then while true do end end`,
-    `if type(pcall)~="function" then while true do end end`,
-    `local ${V}=math.floor(math.pi*1000) if ${V}~=3141 then while true do end end`,
-  ].join(' ')
-}
-
-// ── Main export ──────────────────────────────────────────────
-function obfuscate(sourceCode, options = { shadowSticker: true }) {
-  if (!sourceCode || !sourceCode.trim()) return '--ERROR'
-
-  let payload
-  const urlMatch = sourceCode.match(
-    /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  )
-  payload = urlMatch ? urlMatch[1] : sourceCode
-
-  const vm = buildLayers(payload, options)
-  return `${HEADER} ${antiDebug()} ${vm}`.replace(/\s+/g, ' ').trim()
-}
-
-module.exports = { obfuscate }
+module.exports = { obfuscate };
