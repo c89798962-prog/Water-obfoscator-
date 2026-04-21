@@ -64,7 +64,7 @@ client.on('interactionCreate', async interaction => {
 
     await interaction.editReply({
       content: 'Your code is now protected, copy and paste.',
-      files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })]
+      files: [new AttachmentBuilder(buf, { name: 'obfuscated.txt' })]
     });
   } catch (e) {
     console.error(e);
