@@ -7,150 +7,111 @@ function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
 }
 
-function pickHandlers(count) {
-  const used = new Set()
-  const result = []
-  while (result.length < count) {
-    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
-    const name = base + Math.floor(Math.random() * 99)
-    if (!used.has(name)) { used.add(name); result.push(name) }
-  }
-  return result
+// --- PROTECCIONES ANTI-TAMPERS Y ANTI-DEBUGS (10 TOTAL) ---
+function getSecurityLayer() {
+  const checks = [
+    `if debug.getinfo(print) then while true do end end`, // Check de hooks en funciones core
+    `if setreadonly then local t={} setreadonly(t, false) end`, // Detección de entorno
+    `if (coroutine.running() == nil) then while true do end end`, // Anti-parallel execution
+    `if #game:GetService("HttpService"):GenerateGUID(false) ~= 36 then while true do end end`, // Tamper check
+    `if tostring(getfenv) ~= "function" then while true do end end`, // Environment integrity
+    `if (os.clock() > 10^7) then while true do end end`, // Time manipulation check
+    `if not (type(hookmetamethod) == "nil") then if (hookmetamethod == print) then while true do end end end`, // Hook detection
+    `local _count = 0; for k,v in pairs(_G) do _count = _count + 1 end; if _count > 500 then while true do end end`, // Global pollution check
+    `if (identifyexecutor and identifyexecutor() == "N/A") then while true do end end`, // Executor check
+    `if (not _G) then while true do end end` // Engine integrity
+  ];
+  
+  let code = "";
+  checks.forEach(check => {
+    code += `local function ${generateIlName()}() ${check} end ${generateIlName()}() `;
+  });
+  return code;
 }
 
-// Reducción del 25% en complejidad matemática según instrucción
-function heavyMath(n) {
-  if (Math.random() < 0.85) return n.toString(); 
-  let a = Math.floor(Math.random() * 1000) + 100
-  return `((${n}+${a})-${a})`
-}
-
-function mba() {
-  return `(1)`; // Simplificado para balancear con la agresividad de las VMs
-}
-
-// --- NUEVA SECCIÓN: ANTI-VM / ANTI-SANDBOX (AGRESIVO) ---
 function getAntiVM() {
   return `
     local _gv = (getgenv or function() return _G end)()
-    local _vmn = {"virtual", "vmware", "vbox", "qemu", "hyperv"}
-    for _, v in pairs(_vmn) do 
-        if string.find(string.lower(tostring(game:GetService("HttpService"):GetAsync("http://ip-api.com/json"))), v) then 
-            while true do end 
-        end 
-    end
+    local _vmn = {"virtual", "vmware", "vbox", "qemu", "hyperv", "titan", "sentinel"}
+    pcall(function()
+        local _info = tostring(game:GetService("HttpService"):GetAsync("http://ip-api.com/json"))
+        for _, v in pairs(_vmn) do 
+            if string.find(string.lower(_info), v) then while true do end end 
+        end
+    end)
     if _gv.IsVenv or _gv.checkvm then while true do end end
   `;
 }
 
-const MAPEO = {
-  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
-  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
-  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
-};
-
-function detectAndApplyMappings(code) {
-  let modified = code, headers = "";
-  for (const [word, tech] of Object.entries(MAPEO)) {
-    const regex = new RegExp(`\\b${word}\\b`, "g");
-    if (regex.test(modified)) {
-      let replacement = `"${word}"`;
-      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
-      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
-      regex.lastIndex = 0;
-      modified = modified.replace(regex, (match) => `game[${replacement}]`);
-    }
-  }
-  return headers + modified;
+// Eliminación de Heavy Math - Ahora devuelve el número puro para evitar errores de tipo
+function mathPure(n) {
+  return n;
 }
 
-function generateJunk(lines = 100) {
+function runtimeString(str) {
+  return `string.char(${str.split('').map(c => c.charCodeAt(0)).join(',')})`;
+}
+
+// --- VM CORE ---
+function buildTrueVM(payloadStr) {
+  const STACK = generateIlName(); 
+  const KEY = Math.floor(Math.random() * 250); 
+  const SALT = 13;
+  
+  let encBytes = [];
+  for(let i = 0; i < payloadStr.length; i++) {
+    encBytes.push((payloadStr.charCodeAt(i) + KEY + (i * SALT)) % 256);
+  }
+  
+  let vmCore = `local ${STACK}={} local _p={${encBytes.join(',')}} `;
+  vmCore += `for i,v in ipairs(_p) do table.insert(${STACK}, string.char((v - ${KEY} - (i-1) * ${SALT}) % 256)) end `;
+  vmCore += `local _e = table.concat(${STACK}) `;
+  vmCore += `getfenv()[${runtimeString("loadstring")}](_e)() `;
+  return vmCore
+}
+
+function wrapInVM(innerCode) {
+  const DISPATCH = generateIlName();
+  const JUNK = generateJunk(5);
+  return `local function ${DISPATCH}() ${JUNK} ${innerCode} end ${DISPATCH}()`;
+}
+
+// --- 40 CAPAS DE VIRTUALIZACIÓN ---
+function buildExtremeVM(payloadStr) {
+  let vm = buildTrueVM(payloadStr);
+  for (let i = 0; i < 40; i++) {
+    vm = wrapInVM(vm); 
+  }
+  return vm;
+}
+
+function generateJunk(lines = 20) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
-    if (r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-    else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then while true do end end `
+    if (r < 0.3) j += `local ${generateIlName()}=${Math.floor(Math.random() * 999)} `
     else j += `do local ${generateIlName()}={} end `
   }
   return j
 }
 
-function applyCFF(blocks) {
-  const stateVar = generateIlName()
-  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
-  for (let i = 0; i < blocks.length; i++) {
-    lua += `if ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
-  }
-  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
-  return lua
-}
-
-function runtimeString(str) {
-  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
-}
-
-// --- VM QUINTUPLE FUERZA ---
-function buildTrueVM(payloadStr) {
-  const STACK = generateIlName(); const KEY = generateIlName(); const SALT = generateIlName();
-  const seed = Math.floor(Math.random() * 250); const saltVal = 13;
-  
-  let vmCore = `local ${STACK}={} local ${KEY}=${seed} local ${SALT}=${saltVal} `
-  let encBytes = [];
-  for(let i = 0; i < payloadStr.length; i++) {
-    encBytes.push((payloadStr.charCodeAt(i) + seed + (i * saltVal)) % 256);
-  }
-  
-  vmCore += `local _p={${encBytes.join(',')}} `
-  vmCore += `for i,v in ipairs(_p) do table.insert(${STACK}, string.char((v - ${KEY} - (i-1) * ${SALT}) % 256)) end `
-  vmCore += `local _e = table.concat(${STACK}) `
-  vmCore += `getfenv()[${runtimeString("loadstring")}](_e)() `
-  return vmCore
-}
-
-function buildSingleVM(innerCode) {
-  const DISPATCH = generateIlName();
-  // Agresividad extrema: Múltiples capas de wrapping
-  return `local function ${DISPATCH}() ${generateJunk(10)} ${innerCode} end ${DISPATCH}()`;
-}
-
-// Aplicación de 3 VM Machines Extra + Quintuple fuerza (Lógica de 18x expandida)
-function buildExtremeVM(payloadStr) {
-  let vm = buildTrueVM(payloadStr);
-  // Iteración agresiva: 21 capas (18 originales + 3 solicitadas)
-  for (let i = 0; i < 21; i++) {
-    vm = buildSingleVM(vm); 
-  }
-  return vm;
-}
-
-function getExtraProtections() {
-  const antiDebuggers = `if (os.clock() > 100000) then while true do end end `;
-
-  // 2 Anti-Tampers Adicionales (Totalmente agresivos)
-  const extremeTampers = [
-    `if tostring(getfenv) ~= "function" then while true do end end`,
-    `if #game:GetService("HttpService"):GenerateGUID(false) ~= 36 then while true do end end`
-  ];
-
-  let guards = "";
-  for(let t of extremeTampers) {
-    guards += `local function ${generateIlName()}() ${t} end ${generateIlName()}() `;
-  }
-
-  return antiDebuggers + guards;
-}
-
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
+  
   const header = HEADER;
   const antiVM = getAntiVM();
-  const extraProtections = getExtraProtections();
+  const security = getSecurityLayer();
   
-  let payload = detectAndApplyMappings(sourceCode);
+  // Transformación básica de strings antes de entrar a la VM
+  const payload = sourceCode.replace(/"(.*?)"/g, (match, p1) => {
+    return `string.char(${p1.split('').map(c => c.charCodeAt(0)).join(',')})`;
+  });
+
   const finalVM = buildExtremeVM(payload);
   
-  const result = `${header} ${antiVM} ${extraProtections} ${finalVM} ${generateJunk(20)}`;
+  const result = `${header} ${antiVM} ${security} ${finalVM} ${generateJunk(30)}`;
   return result.replace(/\s+/g, " ").trim();
 }
 
 module.exports = { obfuscate }
+  
