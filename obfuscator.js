@@ -6,41 +6,56 @@ function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
 }
 
-function generateMassiveJunk(amount) {
+// --- NUEVO MOTOR DE MATH JUNK (RANDOM FAKE) ---
+// Genera operaciones matemáticas confusas que siempre resultan en valores reales pero inútiles
+function generateMathJunk() {
+    const a = Math.floor(Math.random() * 1000);
+    const b = Math.floor(Math.random() * 1000);
+    const ops = [
+        `local ${generateIlName()} = ((${a} + ${b}) * ${Math.floor(Math.random() * 10)}) / ${Math.floor(Math.random() * 5) + 1}`,
+        `if (${a} * ${b}) > ${a + b} then local ${generateIlName()} = math.sin(${a}) end`,
+        `local ${generateIlName()} = math.sqrt(${a * a}) + math.cos(${b})`,
+        `for i=${Math.floor(Math.random() * 5)}, ${Math.floor(Math.random() * 10) + 6} do local x = i * ${a} end`
+    ];
+    return ops[Math.floor(Math.random() * ops.length)] + "; ";
+}
+
+// Generador de ruido agresivo (Bloated Junk + 30% Extra Math)
+function generateAggressiveJunk(density) {
     let junk = "";
-    for(let i = 0; i < amount; i++) {
-        const v1 = generateIlName();
-        const v2 = generateIlName();
-        junk += `local ${v1} = {${Math.random()}, "${v2}"}; if ${v1}[1] == 0 then ${v2} = {} end `;
+    // Incrementamos un 30% la iteración para más volumen
+    const adjustedDensity = Math.floor(density * 1.3); 
+    for(let i = 0; i < adjustedDensity; i++) {
+        junk += generateMathJunk();
+        if (Math.random() > 0.5) {
+            const v1 = generateIlName();
+            junk += `local ${v1} = function() ${generateMathJunk()} return "${v1}" end; `;
+        }
     }
     return junk;
 }
 
-// --- 20 ANTI-DEBUGGERS EXPANDIDOS ---
+// --- 20 ANTI-DEBUGGERS AGRESIVOS ---
 function getAntiDebugs() {
   let code = "";
   const checks = [
-    `if debug.getinfo(print) then while true do end end`,
-    `if #debug.traceback() > 10 then print(nil) end`,
-    `if (coroutine.yield == nil) then while true do end end`,
-    `if (getfenv(0) ~= getfenv(1)) then while true do end end`,
-    `if (os.time() < 1000) then while true do end end`
+    `if debug.getinfo(print) or debug.getinfo(error) then while true do end end`,
+    `if #debug.traceback() > 15 then while true do end end`,
+    `if (identifyexecutor and identifyexecutor():find("Decompiler")) then while true do end end`,
+    `if not coroutine.isyieldable() then while true do end end`
   ];
   for(let i=0; i<20; i++) {
-    code += `local function ${generateIlName()}() ${generateMassiveJunk(2)} ${checks[i % checks.length]} end ${generateIlName()}() `;
+    code += `local function ${generateIlName()}() ${generateAggressiveJunk(3)} ${checks[i % checks.length]} end ${generateIlName()}() `;
   }
   return code;
 }
 
-// --- 100 ANTI-TAMPERS CON INYECCIÓN DE BASURA ---
+// --- 100 ANTI-TAMPERS AGRESIVOS ---
 function getAntiTampers() {
   let tampers = "";
   for(let i=0; i<100; i++) {
     const v = generateIlName();
-    tampers += `local ${v} = function(...) ${generateMassiveJunk(3)} if not ... then return end end; ${v}(true); `;
-    if(i % 10 === 0) {
-        tampers += `if (game and game.ClassName ~= "DataModel") then while true do end end `;
-    }
+    tampers += `local ${v} = function(...) ${generateAggressiveJunk(2)} if not ... then while true do end end end; ${v}(true); `;
   }
   return tampers;
 }
@@ -49,11 +64,11 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => c.charCodeAt(0)).join(',')})`;
 }
 
-// --- VM CORE ---
+// --- VM CORE (Ejecución Principal) ---
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName();
-  const KEY = Math.floor(Math.random() * 200) + 50;
-  const SALT = 11;
+  const KEY = 188;
+  const SALT = 14;
   let encBytes = [];
   for(let i = 0; i < payloadStr.length; i++) {
     encBytes.push((payloadStr.charCodeAt(i) + KEY + (i * SALT)) % 256);
@@ -61,18 +76,17 @@ function buildTrueVM(payloadStr) {
   return `local ${STACK}={} local _p={${encBytes.join(',')}} for i,v in ipairs(_p) do table.insert(${STACK}, string.char((v - ${KEY} - (i-1) * ${SALT}) % 256)) end getfenv()[${runtimeString("loadstring")}](table.concat(${STACK}))()`;
 }
 
-// --- CAPA DE ENVOLTURA (WRAPPING) ---
-function wrapInVM(innerCode) {
+// --- 50 VM MACHINES AGRESIVAS ---
+function wrapInAggressiveVM(innerCode) {
   const NAME = generateIlName();
-  // Agregamos junk dentro de cada capa de la VM para que el código crezca exponencialmente
-  return `local function ${NAME}() ${generateMassiveJunk(1)} ${innerCode} end ${NAME}()`;
+  // Cada capa ahora es un "tanque" de código basura y matemáticas
+  return `local function ${NAME}() ${generateAggressiveJunk(5)} ${innerCode} ${generateAggressiveJunk(2)} end ${NAME}()`;
 }
 
-// --- 300 CAPAS DE MÁQUINAS VIRTUALES ---
 function buildExtremeVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
-  for (let i = 0; i < 300; i++) {
-    vm = wrapInVM(vm);
+  for (let i = 0; i < 50; i++) {
+    vm = wrapInAggressiveVM(vm);
   }
   return vm;
 }
@@ -81,19 +95,19 @@ function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR';
   
   const header = HEADER;
-  const antiVM = `local _v = (getgenv or function() return _G end)(); if _v.IsVenv then while true do end end `;
+  const antiVM = `local _v = (getgenv or function() return _G end)(); if _v.IsVenv or _v.checkvm then while true do end end `;
   const debugs = getAntiDebugs();
   const tampers = getAntiTampers();
   
-  // Procesamiento de la carga útil
+  // Virtualización con 50 capas de alta densidad
   const finalVM = buildExtremeVM(sourceCode);
   
-  // Generación de bloque final masivo (Junk)
-  const finalJunk = generateMassiveJunk(200);
+  // Bloque final masivo con el incremento del 30% solicitado
+  const finalJunk = generateAggressiveJunk(150);
   
   const result = `${header} ${antiVM} ${debugs} ${tampers} ${finalVM} ${finalJunk}`;
   
-  // No usamos .replace(/\s+/g, " ") de forma tan agresiva para mantener un volumen visual impactante
+  // Retornamos sin limpiar excesivamente los espacios para que el peso del archivo sea evidente
   return result.trim();
 }
 
