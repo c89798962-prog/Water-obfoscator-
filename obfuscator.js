@@ -18,18 +18,20 @@ function pickHandlers(count) {
   return result
 }
 
+// AJUSTE: Reducción del 25% en la probabilidad de generar ecuaciones complejas
 function heavyMath(n) {
-  if (Math.random() < 0.8) return n.toString();
-  let a = Math.floor(Math.random() * 3000) + 500
-  let b = Math.floor(Math.random() * 50) + 2
-  let c = Math.floor(Math.random() * 800) + 10
-  let d = Math.floor(Math.random() * 20) + 2
-  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
+  // Antes 0.8, ahora 0.85 para que más números se queden como strings simples,
+  // y he simplificado la estructura de los paréntesis.
+  if (Math.random() < 0.85) return n.toString();
+  let a = Math.floor(Math.random() * 1500) + 200
+  let b = Math.floor(Math.random() * 30) + 2
+  // Ecuación más corta para reducir el "math code" visual
+  return `(((${n}+${a})*${b})/${b}-${a})`
 }
 
 function mba() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
-  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 50) + 10, b = Math.floor(Math.random() * 20) + 5;
+  return `((${n}*${a}-${a})/${b}+${n})`;
 }
 
 const MAPEO = {
@@ -54,7 +56,6 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
-// TÉCNICA CODE VAULT: Tarpits, Opaque Predicates y Symbol Waterfalls integrados en la Junk
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
@@ -63,15 +64,12 @@ function generateJunk(lines = 100) {
     else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
     else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
     else if (r < 0.7) {
-      // CODE VAULT: Tarpit (Bucle infinito en ruta muerta)
       const tp = generateIlName();
       j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
     } else if (r < 0.85) {
-      // CODE VAULT: Symbol Waterfall Noise
       const vt = generateIlName();
       j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
     } else {
-      // CODE VAULT: Opaque Predicate
       j += `if type(math.pi)=="string" then local _=1 end `
     }
   }
@@ -93,13 +91,12 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// TÉCNICAS CODE VAULT APLICADAS: Rolling XOR Affine Cipher y Silent Key Corruption
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
   const SALT = generateIlName();
   
   const seed = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 250) + 1 // CODE VAULT: Salt rodante
+  const saltVal = Math.floor(Math.random() * 250) + 1 
   
   let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
   const chunkSize = 15; let realChunks = [];
@@ -113,7 +110,6 @@ function buildTrueVM(payloadStr) {
       realOrder.push(i + 1);
       let chunk = realChunks[currentReal]; let encryptedBytes = [];
       for(let j = 0; j < chunk.length; j++) { 
-        // CODE VAULT: Cifrado Rolling-XOR Affine -> (byte + key + index*salt) % 256
         let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
         encryptedBytes.push(heavyMath(enc)); 
         globalIndex++;
@@ -130,9 +126,8 @@ function buildTrueVM(payloadStr) {
   vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
   const idxVar = generateIlName(); const byteVar = generateIlName();
   
-  // CODE VAULT: Decode loop con Interwoven Tamper Checks (Corrupción Silenciosa)
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `; // Silent corruption
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `; 
   vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
@@ -159,15 +154,15 @@ function buildSingleVM(innerCode, handlerCount) {
   out += applyCFF(execBlocks); return out
 }
 
-function build18xVM(payloadStr) {
+// CAMBIO PRINCIPAL: Ahora itera 29 veces + la VM base = 30 VMs
+function build30xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
-  for (let i = 0; i < 17; i++) {
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
+  for (let i = 0; i < 29; i++) {
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 2); 
   }
   return vm;
 }
 
-// TÉCNICAS CODE VAULT APLICADAS: IIFE Wrappers y Error() Oculto
 function getExtraProtections() {
   const antiDebuggers =
     `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
@@ -176,7 +171,6 @@ function getExtraProtections() {
     `if getmetatable(_G)~=nil then while true do end end ` +
     `if type(print)~="function" then while true do end end `;
 
-  // Conservando todos tus Tampers originales + Categorías nuevas de Code Vault
   const rawTampers = [
     `if math.pi<3.14 or math.pi>3.15 then _err() end`,
     `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
@@ -190,7 +184,6 @@ function getExtraProtections() {
     `if type(next)~="function" then _err() end`,
     `if string.len("a")~=1 then _err() end`,
     `if type(table.insert)~="function" then _err() end`,
-    // CODE VAULT Categorías Extra
     `if string.byte("Z",1)~=90 then _err() end`,
     `if math.floor(-1/10)~=-1 then _err() end`,
     `if (true and 1 or 2)~=1 then _err() end`,
@@ -202,8 +195,6 @@ function getExtraProtections() {
   for(let t of rawTampers) {
     const fnName = generateIlName();
     const errName = generateIlName();
-    // CODE VAULT: Envuelve la guardia en una función anónima inmediata (IIFE) 
-    // y esconde 'error' en una variable local dinámica.
     const injectedError = t.replace("_err()", `${errName}("!")`);
     codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
   }
@@ -216,15 +207,15 @@ function obfuscate(sourceCode) {
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
   const extraProtections = getExtraProtections()
   let payloadToProtect = ""
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
   if (match) { payloadToProtect = match[1] } 
   else { payloadToProtect = detectAndApplyMappings(sourceCode) }
   
-  const finalVM = build18xVM(payloadToProtect)
-  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
+  // Llamada a la nueva función de 30 capas
+  const finalVM = build30xVM(payloadToProtect)
+  const result = `${HEADER} ${generateJunk(40)} ${antiDebug} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
-                                                                        
