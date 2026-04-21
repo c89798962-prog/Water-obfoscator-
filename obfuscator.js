@@ -1,381 +1,275 @@
-// ╔══════════════════════════════════════════════════════════════════╗
-// ║  vvmer obfuscator v5 — MoonSec/Luraph/IronBrew grade            ║
-// ║  XOR waterfall(3 keys) · RC4 stream · 6 VM styles               ║
-// ║  do-end scoping · no local overflow · clean Lua 5.1             ║
-// ╚══════════════════════════════════════════════════════════════════╝
+/**
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║       Tomato Deobfusquer v2  –  JavaScript Edition          ║
+ * ║   Invierte CodeVault v35 rolling-XOR + base-10 encoding     ║
+ * ║   Compatible con Node.js  (node tomato_deobfusquer.js)       ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ *
+ * Uso (Node.js):
+ *   node tomato_deobfusquer.js input_obf.lua [output_clean.lua]
+ *
+ * También exporta  deobfuscate(luaCode)  para usar como módulo.
+ */
 
-const HEADER = `--[[ vvmer ]]`
+"use strict";
 
-// ── Name pools — all look like visual garbage ─────────────────────────
-const GLYPH_POOL = [
-  "OOO0O","O0OO0","OO0OO","O00O0","0OO0O","00O0O","O0O0O","0O0OO",
-  "OOOO0","0OOO0","O000O","0000O","OO00O","00OOO","O0000","0O000",
-  "lIlII","IlIlI","lIIlI","IIlIl","lIlIl","IlIIl","lIIII","IIIlI",
-  "llIlI","IlIll","lllIl","Illll","lIlll","IlIII","llllI","IIIll",
-  "vVvVv","VvVvV","vVVvV","VVvVV","vvVvV","VvvVv","vVvvV","VvVVv",
-  "WwWwW","wWwWw","WwWWw","wWWwW","WwwWw","wWwwW"
-]
-const SHORT_POOL = [
-  "OP","BA","LA","BL","AL","OL","LO","AB","OA","BO","PO","PA",
-  "LP","PL","BP","PB","AO","OB","AP","LB","OAB","BAL","LAB",
-  "BLA","ALO","OBL","POA","APO","BOP","LAP","OAL","BPA","LOB"
-]
+// ── Watermark que se añade al inicio de todo código desobfuscado ────────────
+const WATERMARK = "--[[this code it's deobfosquet by tomato deobfosquer ]]\n";
 
-const gn = () => {
-  const pool = Math.random() < 0.5 ? GLYPH_POOL : SHORT_POOL
-  const base = pool[Math.floor(Math.random() * pool.length)]
-  const num  = (Math.floor(Math.random() * 99999) | 0).toString(36).toUpperCase()
-  return base + num
-}
-const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a
+// ── Pool de caracteres válidos del codec de CodeVault v35 ───────────────────
+const CODEC_POOL = new Set([...">#_</$|^!@%?=+-*:.;,(){}[]"]);
 
-// ── Number obfuscation — ONLY arithmetic & bit32.bxor ────────────────
-// NOTE: No anonymous functions here — those caused Lua parser failures
-function me(n) {
-  const r = Math.random()
-  if (r < 0.35) return String(n)
-  if (r < 0.68) {
-    const a = rnd(3, 40) * 2, b = rnd(2, 9)
-    return `(${n + a * b}-${a}*${b})`
+// ── Mensajes de log con prefijo // ─────────────────────────────────────────
+const log  = (msg) => console.log(`// ${msg}`);
+const warn = (msg) => console.warn(`// ⚠  ${msg}`);
+const fail = (msg) => { throw new Error(`// ❌  ${msg}`); };
+
+// ════════════════════════════════════════════════════════════════════════════
+// UTILIDADES
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Parsea un número Lua: hex (0x...), decimal, negativo, con paréntesis.
+ * Más robusto que parseInt: maneja 0X, paréntesis anidados, espacios.
+ */
+function parseLuaNum(raw) {
+  let s = raw.trim();
+  // quitar paréntesis externos mientras haya
+  while (s.startsWith("(") && s.endsWith(")")) s = s.slice(1, -1).trim();
+  const neg = s.startsWith("-");
+  if (neg) {
+    s = s.slice(1).trim();
+    while (s.startsWith("(") && s.endsWith(")")) s = s.slice(1, -1).trim();
   }
-  const x = rnd(1, 0x7FFF)
-  return `bit32.bxor(${n ^ x},${x})`
+  const v = s.toLowerCase().startsWith("0x")
+    ? parseInt(s, 16)
+    : parseInt(s, 10);
+  if (isNaN(v)) fail(`No se pudo parsear el número: "${raw}"`);
+  return neg ? -v : v;
 }
 
-// String → individual char codes
-const sc = s => Array.from(s).map(c => me(c.charCodeAt(0))).join(',')
-
-// ── Junk code — wrapped in do-end so locals don't accumulate ─────────
-function junk(n = 3) {
-  let j = 'do '
-  const OPS = [
-    () => { const v = gn(); return `local ${v}=${me(rnd(1, 999))} ` },
-    () => { const v = gn(); return `local ${v}=nil ` },
-    () => `if false then end `,
-    () => { const v = gn(), w = gn(); return `local ${v}=${me(rnd(1,50))} local ${w}=${v}+${me(rnd(1,10))} ` },
-    () => { const v = gn(); return `local ${v}=not false ` },
-    () => { const v = gn(); return `local ${v}="" ` },
-    () => `if nil then end `,
-    () => { const v = gn(), a = rnd(1,20), b = rnd(1,20); return `local ${v}=bit32.bxor(${me(a)},${me(b)}) ` },
-  ]
-  for (let i = 0; i < n; i++) j += OPS[rnd(0, OPS.length - 1)]()
-  j += 'end '
-  return j
+/**
+ * Busca TODOS los matches de un regex en un string (generator).
+ */
+function* matchAll(str, regex) {
+  const re = new RegExp(regex.source, regex.flags.includes("g") ? regex.flags : regex.flags + "g");
+  let m;
+  while ((m = re.exec(str)) !== null) yield m;
 }
 
-// ── Runtime keys (3 independent, all unknown statically) ─────────────
-// K1 = string.byte(tostring(math.pi),1)      = 51
-// K2 = string.byte(tostring(math.huge),2)    = 110
-// K3 = string.len(tostring(math.pi))         = 16
-const RT_K1_EXPR = `string.byte(tostring(math.pi),1)`
-const RT_K2_EXPR = `string.byte(tostring(math.huge),2)`
-const RT_K3_EXPR = `string.len(tostring(math.pi))`
-const RT_K1_VAL  = 51
-const RT_K2_VAL  = 110
-const RT_K3_VAL  = 16
+// ════════════════════════════════════════════════════════════════════════════
+// MOTOR PRINCIPAL DE DEOBFUSCACIÓN
+// ════════════════════════════════════════════════════════════════════════════
 
-// ── JS-side encryption ────────────────────────────────────────────────
-function xorEncrypt(bytes, seed) {
-  return bytes.map((b, i) =>
-    b ^ ((seed + RT_K1_VAL + RT_K2_VAL * i + RT_K3_VAL * (i >> 2)) & 0xFF)
-  )
-}
+/**
+ * Desobfusca un string de código Lua generado por CodeVault v35.
+ * Retorna el código fuente original como string.
+ *
+ * Pasos:
+ *  1. Encontrar el MAP (tabla 10 entradas → char a dígito 0-9)
+ *  2. Identificar vK y vS por la estructura del bucle decode
+ *  3. Leer los valores numéricos de key y salt
+ *  4. Recuperar los 4 chunks del payload cifrado
+ *  5. Invertir rolling-XOR: byte = (encoded - key - i*salt) % 256
+ *  6. Decodificar bytes → UTF-8
+ */
+function deobfuscate(luaCode) {
 
-function rc4Key(len) {
-  return Array.from({ length: len }, () => rnd(1, 255))
-}
+  // ── PASO 1: Encontrar el MAP del codec ─────────────────────────────────
+  // Patrón emitido por CodeVault: local <var>={["c"]=N, ["c"]=N, ...}  (10 entradas)
+  log("Paso 1/5 → Buscando tabla MAP del codec...");
 
-function rc4Encrypt(bytes, key) {
-  const S = Array.from({ length: 256 }, (_, i) => i)
-  let j = 0
-  for (let i = 0; i < 256; i++) {
-    j = (j + S[i] + key[i % key.length]) & 0xFF
-    ;[S[i], S[j]] = [S[j], S[i]]
-  }
-  let a = 0, b = 0
-  return bytes.map(byte => {
-    a = (a + 1) & 0xFF
-    b = (b + S[a]) & 0xFF
-    ;[S[a], S[b]] = [S[b], S[a]]
-    return byte ^ S[(S[a] + S[b]) & 0xFF]
-  })
-}
+  let charMap = null;
 
-// ════════════════════════════════════════════════════════════════════
-// BUILD CORE — dual encrypted, scattered across fake slots
-// Entire core wrapped in do-end → zero local leakage to outer scope
-// ════════════════════════════════════════════════════════════════════
-function buildCore(payload) {
-  const seed   = rnd(32, 200)
-  const rc4key = rc4Key(16)
-  const seed2  = rnd(1, 200)
-  const isUrl  = /^https?:\/\//.test(payload)
+  for (const m of matchAll(
+    luaCode,
+    /local\s+[Il_]+\s*=\s*\{((?:\["[^"]{1}"\]\s*=[^,}]+,?\s*){8,12})\}/
+  )) {
+    const body = m[1];
+    const entries = [...matchAll(body, /\["([^"]{1})"\]\s*=\s*([^,}\s]+)/)]
+      .map(e => [e[1], e[2]]);
 
-  // JS-side: encrypt in 3 passes
-  let bytes = Array.from(payload).map(c => c.charCodeAt(0))
-  bytes = xorEncrypt(bytes, seed)        // pass 1
-  bytes = rc4Encrypt(bytes, rc4key)      // pass 2
-  bytes = bytes.map((b, i) => b ^ ((seed2 + i * 7) & 0xFF))  // pass 3
-
-  // Scatter real chunks among fake ones
-  const CHUNK = rnd(5, 9)
-  const realChunks = []
-  for (let i = 0; i < bytes.length; i += CHUNK)
-    realChunks.push(bytes.slice(i, i + CHUNK))
-
-  const totalSlots = realChunks.length * 2 + rnd(4, 8)
-  const vars = [], realAt = []
-  let realPtr = 0, poolCode = ''
-
-  for (let slot = 0; slot < totalSlots; slot++) {
-    const v = gn(); vars.push(v)
-    const need = realChunks.length - realPtr
-    const left = totalSlots - slot
-    const useReal = realPtr < realChunks.length &&
-      (Math.random() > 0.45 || left <= need)
-    if (useReal) {
-      realAt.push(slot)
-      poolCode += `local ${v}={${realChunks[realPtr++].map(me).join(',')}} `
-    } else {
-      const fl = rnd(4, 12)
-      poolCode += `local ${v}={${Array.from({ length: fl }, () => me(rnd(0, 255))).join(',')}} `
+    if (
+      entries.length === 10 &&
+      entries.every(([ch]) => CODEC_POOL.has(ch))
+    ) {
+      try {
+        charMap = new Map(entries.map(([ch, raw]) => [ch, parseLuaNum(raw)]));
+        log(`  MAP encontrado: { ${[...charMap.entries()].map(([k,v])=>`"${k}"→${v}`).join(", ")} }`);
+        break;
+      } catch (_) { /* intentar siguiente match */ }
     }
   }
 
-  // Unique variable names for this core
-  const [RK, K1, K2, K3, SD, SD2, POOL, ORD, BUF,
-         SS, SJ, SA, SB, TOUT, OUT, ENV, LS, CHK, HS] =
-    Array.from({ length: 19 }, gn)
+  if (!charMap) fail(
+    "No se encontró el MAP del codec.\n" +
+    "//    Verifica que el archivo fue generado por CodeVault v35."
+  );
 
-  let code = `do `  // <-- wrap entire core: no local overflow
+  const symChars = new Set(charMap.keys());
 
-  code += poolCode
-  code += `local ${RK}={${rc4key.map(me).join(',')}} `
-  code += `local ${POOL}={${vars.join(',')}} `
-  code += `local ${ORD}={${realAt.map(r => me(r + 1)).join(',')}} `
-  code += `local ${K1}=${RT_K1_EXPR} `
-  code += `local ${K2}=${RT_K2_EXPR} `
-  code += `local ${K3}=${RT_K3_EXPR} `
-  code += `local ${SD}=${me(seed)} `
-  code += `local ${SD2}=${me(seed2)} `
+  // ── PASO 2: Identificar vK y vS por el bucle decode ────────────────────
+  // CodeVault siempre emite:
+  //   local _kv=(<vK>+0)%<256_hex>
+  //   ... -_xi*<vS>) ...
+  log("Paso 2/5 → Identificando variables de clave y salt en el bucle decode...");
 
-  // Collect real bytes
-  code += `local ${BUF}={} `
-  code += `for _a=1,#${ORD} do for _b=1,#${POOL}[${ORD}[_a]] do `
-  code += `${BUF}[#${BUF}+1]=${POOL}[${ORD}[_a]][_b] end end `
+  const mKv  = /local\s+_kv\s*=\s*\(([Il_]+)\+0\)/.exec(luaCode);
+  const mXs  = /_xi\s*\*\s*([Il_]+)/.exec(luaCode);
 
-  // Decrypt pass 3: undo final XOR fold
-  code += `for _a=1,#${BUF} do `
-  code += `${BUF}[_a]=bit32.bxor(${BUF}[_a],(${SD2}+(_a-1)*7)%256) end `
+  if (!mKv) fail("No se encontró '_kv=(<vK>+0)' en el bucle decode.");
+  if (!mXs) fail("No se encontró '_xi*<vS>' en el bucle decode.");
 
-  // Decrypt pass 2: RC4
-  // _vrt = temp swap variable, unique per loop, won't collide with outer
-  code += `local ${SS}={} for _a=0,255 do ${SS}[_a]=_a end `
-  code += `local ${SJ}=0 `
-  code += `for _a=0,255 do `
-  code += `${SJ}=(${SJ}+${SS}[_a]+${RK}[(_a%16)+1])%256 `
-  code += `local _c=${SS}[_a] ${SS}[_a]=${SS}[${SJ}] ${SS}[${SJ}]=_c `
-  code += `end `
-  code += `local ${SA}=0 local ${SB}=0 `
-  code += `for _a=1,#${BUF} do `
-  code += `${SA}=(${SA}+1)%256 `
-  code += `${SB}=(${SB}+${SS}[${SA}])%256 `
-  code += `local _c=${SS}[${SA}] ${SS}[${SA}]=${SS}[${SB}] ${SS}[${SB}]=_c `
-  code += `${BUF}[_a]=bit32.bxor(${BUF}[_a],${SS}[(${SS}[${SA}]+${SS}[${SB}])%256]) end `
+  const vKname = mKv[1];
+  const vSname = mXs[1];
+  log(`  Variable clave: ${vKname} | Variable salt: ${vSname}`);
 
-  // Decrypt pass 1: XOR waterfall with 3 runtime keys
-  code += `for _a=1,#${BUF} do `
-  code += `${BUF}[_a]=bit32.bxor(${BUF}[_a],(${SD}+${K1}+${K2}*(_a-1)+${K3}*math.floor((_a-1)/4))%256) end `
+  // ── PASO 3: Leer valores numéricos ─────────────────────────────────────
+  log("Paso 3/5 → Leyendo valores de key y salt...");
 
-  // Assemble output string
-  code += `local ${TOUT}={} for _a=1,#${BUF} do ${TOUT}[_a]=string.char(${BUF}[_a]) end `
-  code += `local ${OUT}=table.concat(${TOUT}) ${BUF}=nil ${TOUT}=nil `
+  const numPat = String.raw`\(?\s*-?\s*0[xX][0-9a-fA-F]+\s*\)?|\(?\s*-?\s*\d+\s*\)?`;
 
-  // Get loadstring via char codes (anti-hook)
-  code += `local ${ENV}=getfenv(0) `
-  code += `local ${LS}=${ENV}[string.char(${sc("loadstring")})] `
+  const mKey  = new RegExp(`local\\s+${escRe(vKname)}\\s*=\\s*(${numPat})`).exec(luaCode);
+  const mSalt = new RegExp(`local\\s+${escRe(vSname)}\\s*=\\s*(${numPat})`).exec(luaCode);
 
-  // loadstring integrity: hash tostring(loadstring), must be nonzero
-  code += `local ${CHK}=tostring(${LS}) local ${HS}=0 `
-  code += `for _a=1,#${CHK} do ${HS}=(${HS}*31+string.byte(${CHK},_a))%1073741824 end `
-  code += `if ${HS}==0 then while true do end end `
+  if (!mKey)  fail(`No se encontró el valor de la clave (${vKname}).`);
+  if (!mSalt) fail(`No se encontró el valor del salt (${vSname}).`);
 
-  if (isUrl) {
-    const G = gn()
-    code += `local ${G}=${ENV}[string.char(${sc("game")})] `
-    code += `${ENV}[string.char(${sc("assert")})](${LS}(${G}[string.char(${sc("HttpGet")})](${G},${OUT})))() `
-  } else {
-    code += `${ENV}[string.char(${sc("assert")})](${LS}(${OUT}))() `
+  const key  = parseLuaNum(mKey[1]);
+  const salt = parseLuaNum(mSalt[1]);
+  log(`  key = ${key} | salt = ${salt}`);
+
+  // ── PASO 4: Recuperar los 4 chunks del payload ─────────────────────────
+  // CodeVault emite: local <vFULL>=<vTC>({<c1>,<c2>,<c3>,<c4>})
+  log("Paso 4/5 → Localizando los 4 chunks del payload cifrado...");
+
+  const mTC = /local\s+([Il_]+)\s*=\s*[Il_]+\s*\(\{([Il_,\s]+)\}\)/.exec(luaCode);
+  if (!mTC) fail("No se encontró el table.concat de chunks.");
+
+  const chunkVars = [...mTC[2].matchAll(/[Il_]+/g)].map(x => x[0]);
+  if (chunkVars.length !== 4) fail(
+    `Se esperaban 4 chunk-vars, se encontraron ${chunkVars.length}.`
+  );
+  log(`  Chunk vars: ${chunkVars.join(", ")}`);
+
+  let fullEncoded = "";
+  for (const varName of chunkVars) {
+    const mChunk = new RegExp(`local\\s+${escRe(varName)}\\s*=\\s*"([^"]+)"`).exec(luaCode);
+    if (!mChunk) fail(`No se encontró el valor del chunk '${varName}'.`);
+
+    const chunk = mChunk[1];
+
+    // Validación extra: todos los chars deben pertenecer al sym10
+    const badChars = [...chunk].filter(c => !symChars.has(c));
+    if (badChars.length > 0) fail(
+      `Chunk '${varName}' contiene ${badChars.length} caracteres inválidos.\n` +
+      `//    Primeros inválidos: ${[...new Set(badChars)].slice(0,8).join(" ")}`
+    );
+
+    fullEncoded += chunk;
+    log(`  Chunk '${varName}': ${chunk.length} chars`);
   }
 
-  code += `end ` // close do-end wrapper
-  return code
-}
-
-// ════════════════════════════════════════════════════════════════════
-// 6 VM WRAPPER STYLES
-// CRITICAL: every style wraps its entire body in do-end
-// This prevents Lua's 200 local limit from being hit across layers
-// ════════════════════════════════════════════════════════════════════
-
-// Style A: Table dispatch — real fn hidden among dummies
-function styleA(inner) {
-  const count   = rnd(3, 5)
-  const hnames  = Array.from({ length: count }, gn)
-  const realIdx = rnd(0, count - 1)
-  const D = gn(), S = gn(), ARG = gn()
-  let code = `do `
-  for (let i = 0; i < count; i++) {
-    const body = i === realIdx ? inner : junk(rnd(2, 4))
-    code += `local ${hnames[i]}=function(${ARG}) ${body} end `
+  if (fullEncoded.length % 3 !== 0) {
+    warn(`Longitud del payload (${fullEncoded.length}) no es múltiplo de 3. Recortando...`);
+    fullEncoded = fullEncoded.slice(0, fullEncoded.length - fullEncoded.length % 3);
   }
-  code += `local ${D}={${hnames.map((h, i) => `[${me(i + 1)}]=${h}`).join(',')}} `
-  code += `local ${S}=${me(realIdx + 1)} `
-  code += `if ${D}[${S}] then ${D}[${S}]() end `
-  code += `end `
-  return code
-}
 
-// Style B: while-CFF state machine with random step base
-function styleB(inner) {
-  const count   = rnd(3, 6)
-  const realIdx = rnd(0, count - 1)
-  const S       = gn()
-  const base    = rnd(1000, 99999)
-  let code = `do local ${S}=${me(base)} while true do `
-  for (let i = 0; i < count; i++) {
-    const kw   = i === 0 ? 'if' : 'elseif'
-    const step = base + i
-    code += `${kw} ${S}==${me(step)} then `
-    if (i === realIdx) {
-      code += `${inner} ${S}=${me(base + count)} `
+  log(`  Payload total: ${fullEncoded.length} chars → ${fullEncoded.length / 3} bytes`);
+
+  // ── PASO 5: Invertir el rolling-XOR ────────────────────────────────────
+  // Cifrado original: c[i] = (b[i] + key + i*salt) % 256
+  // Inverso:          b[i] = (c[i] - key - i*salt + 256*N) % 256
+  log("Paso 5/5 → Decodificando payload (rolling-XOR inverso)...");
+
+  const byteLen = fullEncoded.length / 3;
+  const decoded = new Uint8Array(byteLen);
+
+  for (let xi = 0; xi < byteLen; xi++) {
+    const i  = xi * 3;
+    const c0 = charMap.get(fullEncoded[i])     ?? 0;
+    const c1 = charMap.get(fullEncoded[i + 1]) ?? 0;
+    const c2 = charMap.get(fullEncoded[i + 2]) ?? 0;
+    const encodedByte = c0 * 100 + c1 * 10 + c2;
+    // Mod aritmético positivo garantizado sumando 256*múltiplo
+    decoded[xi] = ((encodedByte - key - xi * salt) % 256 + 256) % 256;
+  }
+
+  // ── Decodificar bytes a texto UTF-8 ────────────────────────────────────
+  let source;
+  try {
+    // En Node.js usamos Buffer
+    if (typeof Buffer !== "undefined") {
+      source = Buffer.from(decoded).toString("utf8");
     } else {
-      code += `${junk(2)} ${S}=${me(base + i + 1)} `
+      // En browser / Deno usamos TextDecoder
+      source = new TextDecoder("utf-8").decode(decoded);
     }
+  } catch (e) {
+    warn("UTF-8 falló, intentando latin-1...");
+    source = [...decoded].map(b => String.fromCharCode(b)).join("");
   }
-  code += `elseif ${S}==${me(base + count)} then break end end end `
-  return code
+
+  log(`  ✅ Desobfuscación exitosa: ${source.length} caracteres recuperados`);
+  return source;
 }
 
-// Style C: pcall router through function table
-function styleC(inner) {
-  const count   = rnd(3, 5)
-  const hnames  = Array.from({ length: count }, gn)
-  const realIdx = rnd(0, count - 1)
-  const [ROUTER, KEY, OK, ER] = Array.from({ length: 4 }, gn)
-  let code = `do `
-  for (let i = 0; i < count; i++) {
-    const body = i === realIdx ? inner : junk(rnd(2, 4))
-    code += `local ${hnames[i]}=function() ${body} end `
-  }
-  const tbl = hnames.map((h, i) => `[${me(i + 1)}]=${h}`).join(',')
-  code += `local ${ROUTER}=function(${KEY}) local _rt={${tbl}} if _rt[${KEY}] then _rt[${KEY}]() end end `
-  code += `local ${OK},${ER}=pcall(${ROUTER},${me(realIdx + 1)}) `
-  code += `if not ${OK} then error(${ER}) end `
-  code += `end `
-  return code
+// ── Escapar caracteres especiales de regex ──────────────────────────────────
+function escRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Style D: if-else waterfall with large random sentinel values (IronBrew style)
-function styleD(inner) {
-  const branches = rnd(4, 7)
-  const realIdx  = rnd(0, branches - 1)
-  const GATE     = gn()
-  const used     = new Set()
-  const vals     = []
-  while (vals.length < branches) {
-    const v = rnd(10000, 99999)
-    if (!used.has(v)) { used.add(v); vals.push(v) }
+// ════════════════════════════════════════════════════════════════════════════
+// CLI  (Node.js)
+// ════════════════════════════════════════════════════════════════════════════
+
+if (
+  typeof process !== "undefined" &&
+  typeof require !== "undefined" &&
+  require.main === module
+) {
+  const fs   = require("fs");
+  const path = require("path");
+
+  const args = process.argv.slice(2).filter(a => !a.startsWith("--"));
+  if (args.length < 1) {
+    console.log(
+      "// Uso: node tomato_deobfusquer.js input_obf.lua [output_clean.lua]\n" +
+      "// También: const { deobfuscate } = require('./tomato_deobfusquer');"
+    );
+    process.exit(1);
   }
-  let code = `do local ${GATE}=${me(vals[realIdx])} ` // FIX: was missing `let`
-  for (let i = 0; i < branches; i++) {
-    const kw = i === 0 ? 'if' : 'elseif'
-    code += `${kw} ${GATE}==${me(vals[i])} then `
-    if (i === realIdx) code += `${inner} `
-    else               code += `${junk(2)} `
+
+  const inFile  = args[0];
+  const outFile = args[1] ?? path.basename(inFile, ".lua") + "_clean.lua";
+
+  log(`Tomato Deobfusquer v2 — JavaScript Edition`);
+  log(`Leyendo: ${inFile}`);
+
+  let luaCode;
+  try {
+    luaCode = fs.readFileSync(inFile, "utf8");
+  } catch (e) {
+    fail(`No se pudo leer '${inFile}': ${e.message}`);
   }
-  code += `end end `
-  return code
+
+  let clean;
+  try {
+    clean = deobfuscate(luaCode);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
+  }
+
+  const result = WATERMARK + clean;
+  fs.writeFileSync(outFile, result, "utf8");
+
+  log(`Salida: ${outFile} (${result.length} bytes)`);
+  log(`Código limpio: ${clean.length} bytes`);
+  log(`Todas las capas de ofuscación eliminadas ✅`);
 }
 
-// Style E: repeat-until CFF — indirect jumps (Luraph style)
-function styleE(inner) {
-  const steps   = rnd(3, 5)
-  const realIdx = rnd(0, steps - 1)
-  const [PC, DONE] = [gn(), gn()]
-  const base = rnd(200, 9999)
-  let code = `do local ${PC}=${me(base)} local ${DONE}=false repeat `
-  for (let i = 0; i < steps; i++) {
-    const kw   = i === 0 ? 'if' : 'elseif'
-    const step = base + i
-    code += `${kw} ${PC}==${me(step)} then `
-    if (i === realIdx) {
-      code += `${inner} ${PC}=${me(base + steps)} `
-    } else {
-      code += `${junk(2)} ${PC}=${me(base + i + 1)} `
+// ── Export para uso como módulo ─────────────────────────────────────────────
+if (typeof module !== "undefined") {
+  module.exports = { deobfuscate, WATERMARK };
     }
-  }
-  code += `elseif ${PC}==${me(base + steps)} then ${DONE}=true end until ${DONE} end `
-  return code
-}
-
-// Style F: coroutine isolation wrapper (MoonSec style)
-function styleF(inner) {
-  const [FN, CO, OK, ER] = Array.from({ length: 4 }, gn)
-  let code = `do `
-  code += `local ${FN}=function() ${inner} end `
-  code += `local ${CO}=coroutine.create(${FN}) `
-  code += `local ${OK},${ER}=coroutine.resume(${CO}) `
-  code += `if not ${OK} then error(${ER}) end `
-  code += `end `
-  return code
-}
-
-const STYLES = [styleA, styleB, styleC, styleD, styleE, styleF]
-
-// Rotate — never same style twice in a row
-function buildLayers(payload, layerCount = 29) {
-  let vm = buildCore(payload)
-  let lastStyle = -1
-  for (let i = 0; i < layerCount; i++) {
-    let pick
-    do { pick = rnd(0, STYLES.length - 1) } while (pick === lastStyle)
-    lastStyle = pick
-    vm = STYLES[pick](vm)
-  }
-  return vm
-}
-
-// ── Anti-debug header ─────────────────────────────────────────────────
-function antiDebug() {
-  const [T, V, W, X] = Array.from({ length: 4 }, gn)
-  return [
-    `do local ${T}=os.clock() for _=1,100000 do end if os.clock()-${T}>4 then while true do end end end`,
-    `if debug~=nil and rawget(debug,"getinfo")~=nil then while true do end end`,
-    `if getmetatable(_G)~=nil then while true do end end`,
-    `if type(loadstring)~="function" then while true do end end`,
-    `if type(pcall)~="function" then while true do end end`,
-    `do local ${V}=math.floor(math.pi*1000) if ${V}~=3141 then while true do end end end`,
-    `do local ${W}=tostring(math.huge) if #${W}<3 then while true do end end end`,
-    `if type(bit32)~="table" then while true do end end`,
-    `if type(coroutine)~="table" then while true do end end`,
-    `if type(rawget)~="function" or type(rawset)~="function" then while true do end end`,
-    `do local ${X}=os.clock() for _=1,50000 do end if os.clock()-${X}>3 then while true do end end end`,
-  ].join(' ')
-}
-
-// ── Main export ───────────────────────────────────────────────────────
-function obfuscate(sourceCode, layerCount = 29) {
-  if (!sourceCode || !sourceCode.trim()) return '--ERROR'
-
-  let payload
-  const urlMatch = sourceCode.match(
-    /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  )
-  payload = urlMatch ? urlMatch[1] : sourceCode
-
-  const vm = buildLayers(payload, layerCount)
-  return `${HEADER} ${antiDebug()} ${vm}`.replace(/\s+/g, ' ').trim()
-}
-
-module.exports = { obfuscate }
