@@ -1,6 +1,6 @@
 // ╔══════════════════════════════════════════════════════╗
 // ║  vvmer obfoscator v4 — anti FlameDumper "direct"    ║
-// ║  Runtime XOR key · 3 VM styles · no patterns        ║
+// ║  Runtime XOR key · 3 VM styles · Shadow-Sticker     ║
 // ╚══════════════════════════════════════════════════════╝
 
 const HEADER = `--[[ protected by vvmer ]]`
@@ -17,7 +17,6 @@ const H_POOL = [
   "eA","fG","hJ","iK","rP","uN","oB","sT","dE","gF","jH","kI"
 ]
 
-// Short aliases
 const gn  = () => IL_POOL[Math.floor(Math.random()*IL_POOL.length)] + Math.floor(Math.random()*9999)
 const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a
 
@@ -30,17 +29,14 @@ function pickH(count) {
   return res
 }
 
-// Obfuscate a number literal
 function me(n) {
   if (Math.random() < 0.6) return String(n)
   const a = rnd(5,40)*2, b = rnd(2,8)
   return `(${n+a*b}-${a}*${b})`
 }
 
-// Obfuscate a string as char sequence
 const sc = s => Array.from(s).map(c => me(c.charCodeAt(0))).join(',')
 
-// Compact junk — few lines, low weight
 function junk(n=3) {
   let j = ''
   for (let i=0; i<n; i++) {
@@ -52,32 +48,19 @@ function junk(n=3) {
   return j
 }
 
-// ── Runtime key — defeats static byte scanning ───────────────
-//
-//   string.byte(tostring(math.pi),1)
-//   → tostring(math.pi) = "3.14159265..."
-//   → string.byte("3...",1) = 51  (ASCII '3')
-//
-//  FlameDumper static analysis CANNOT evaluate Lua expressions,
-//  so it can never know the decryption key = 51.
-//
-const RT_KEY_EXPR = `string.byte(tostring(math.pi),1)`  // = 51 at runtime
-const RT_KEY_VAL  = 51                                   // used at obfuscation time
+// ── Runtime key ──────────────────────────────────────────────
+const RT_KEY_EXPR = `string.byte(tostring(math.pi),1)`
+const RT_KEY_VAL  = 51
 
-// ── Core VM (innermost layer) ────────────────────────────────
-// Encrypts payload with XOR keyed by (seed + RT_KEY + i*11) % 256
-// RT_KEY is unknowable statically → static byte recovery fails
-
+// ── Core VM ──────────────────────────────────────────────────
 function buildCore(payload) {
   const seed  = rnd(32, 200)
   const isUrl = /^https?:\/\//.test(payload)
 
-  // XOR encrypt
   const enc = Array.from(payload).map((c,i) =>
     c.charCodeAt(0) ^ ((seed + RT_KEY_VAL + i*11) & 0xFF)
   )
 
-  // Scatter into real + fake slots
   const CHUNK = 7
   const realChunks = []
   for (let i=0; i<enc.length; i+=CHUNK) realChunks.push(enc.slice(i,i+CHUNK))
@@ -103,24 +86,20 @@ function buildCore(payload) {
     }
   }
 
-  // Variable names
   const [RK,BUF,IDX,BY,POOL,ORD,OUT,ENV,LS] = Array.from({length:9},gn)
 
   let code = poolCode
   code += `local ${POOL}={${vars.join(',')}} `
   code += `local ${ORD}={${realAt.map(r=>me(r+1)).join(',')}} `
-  code += `local ${RK}=${RT_KEY_EXPR} `           // runtime key — cannot be precomputed
+  code += `local ${RK}=${RT_KEY_EXPR} `
   code += `local ${BUF}={} local ${IDX}=0 `
-  // Decrypt loop — XOR bytes back using runtime key
   code += `for _,_s in ipairs(${ORD}) do for _,${BY} in ipairs(${POOL}[_s]) do `
   code += `${BUF}[#${BUF}+1]=string.char(bit32.bxor(${BY},(${me(seed)}+${RK}+${IDX}*11)%256)) `
   code += `${IDX}=${IDX}+1 end end `
   code += `local ${OUT}=table.concat(${BUF}) ${BUF}=nil `
 
-  // Anti-hook: reconstruct loadstring from env instead of calling it directly
   code += `local ${ENV}=getfenv(0) `
   code += `local ${LS}=${ENV}[string.char(${sc("loadstring")})] `
-  // Detect if loadstring was replaced by a hook proxy
   const [CHK,HS] = [gn(),gn()]
   code += `local ${CHK}=tostring(${LS}) local ${HS}=0 `
   code += `for _i=1,#${CHK} do ${HS}=(${HS}*31+string.byte(${CHK},_i))%1073741824 end `
@@ -137,12 +116,7 @@ function buildCore(payload) {
   return code
 }
 
-// ══════════════════════════════════════════════════════════════
-// 3 DISTINCT VM WRAPPER STYLES — rotate randomly, never repeat
-// the same style consecutively → no structural patterns
-// ══════════════════════════════════════════════════════════════
-
-// Style A: Table dispatch with random real index
+// ── VM Style A ───────────────────────────────────────────────
 function styleA(inner) {
   const count    = rnd(2,4)
   const handlers = pickH(count)
@@ -155,19 +129,18 @@ function styleA(inner) {
     code += `local ${handlers[i]}=function(${ARG}) ${junk(rnd(1,2))} ${body} end `
   }
   code += `local ${D}={${handlers.map((h,i)=>`[${me(i+1)}]=${h}`).join(',')}} `
-  // CFF to reach the real handler
   const S = gn()
   code += `local ${S}=${me(realIdx+1)} `
   code += `if ${D}[${S}] then ${D}[${S}]() end `
   return code
 }
 
-// Style B: while-CFF state machine with unique step values per layer
+// ── VM Style B ───────────────────────────────────────────────
 function styleB(inner) {
   const count    = rnd(2,5)
   const realIdx  = rnd(0,count-1)
   const S = gn()
-  const base     = rnd(100, 5000)  // random base offset — no two layers share steps
+  const base     = rnd(100, 5000)
 
   let code = `local ${S}=${me(base)} while true do `
   for (let i=0; i<count; i++) {
@@ -184,7 +157,7 @@ function styleB(inner) {
   return code
 }
 
-// Style C: pcall dispatch through a generated router function
+// ── VM Style C ───────────────────────────────────────────────
 function styleC(inner) {
   const count    = rnd(2,4)
   const handlers = pickH(count)
@@ -197,7 +170,6 @@ function styleC(inner) {
     code += `local ${handlers[i]}=function() ${junk(rnd(1,2))} ${body} end `
   }
 
-  // Router picks handler by key
   const tbl = handlers.map((h,i)=>`[${me(i+1)}]=${h}`).join(',')
   code += `local ${ROUTER}=function(${KEY}) local _t={${tbl}} `
   code += `if _t[${KEY}] then _t[${KEY}]() end end `
@@ -209,40 +181,86 @@ function styleC(inner) {
 
 const STYLES = [styleA, styleB, styleC]
 
-// Rotate styles — never use the same two in a row
-function buildLayers(payload) {
+// ── Shadow-Sticker — Volatile Execution + Decoy Bait ─────────
+//
+//  1. Coroutine creado con closure del payload real
+//  2. Referencia nominal → sobreescrita con decoy ANTES del resume
+//  3. Timer paralelo destruye el CO a los 3s
+//  4. Dump post-ejecución solo encuentra el decoy
+//
+function shadowSticker(inner) {
+  const [REAL, DECOY, CO, OK2, ER2, LAUNCH, TIMER_CO] = Array.from({length: 7}, gn)
+  const decoyMsg = "nah bro this print is not the real code"
+
+  let code = ''
+
+  // Función real (contiene todo el payload)
+  code += `local ${REAL}=function() ${inner} end `
+
+  // Función cebo — válida pero sin lógica real
+  code += `local ${DECOY}=function() `
+  code += `print(string.char(${sc(decoyMsg)})) `
+  code += `end `
+
+  // Timestamp de lanzamiento
+  code += `local ${LAUNCH}=os.clock() `
+
+  // Crear coroutine ANTES de destruir la referencia (captura el closure)
+  code += `local ${CO}=coroutine.create(${REAL}) `
+
+  // DESTRUIR referencia — a partir de aquí cualquier hook ve solo decoy
+  code += `${REAL}=${DECOY} `
+
+  // Timer paralelo: destruye el coroutine a los 3 segundos
+  code += `local ${TIMER_CO}=coroutine.create(function() `
+  code += `  while os.clock()-${LAUNCH}<3 do coroutine.yield() end `
+  code += `  ${CO}=nil `
+  code += `end) `
+  code += `coroutine.resume(${TIMER_CO}) `
+
+  // Ejecutar payload real por su coroutine (el closure sobrevive al nil del nombre)
+  code += `local ${OK2},${ER2}=coroutine.resume(${CO}) `
+  // Destruir inmediatamente tras ejecución
+  code += `${CO}=nil `
+  code += `if not ${OK2} then error(${ER2}) end `
+
+  return code
+}
+
+// ── Build layers ─────────────────────────────────────────────
+function buildLayers(payload, options = {}) {
   let vm = buildCore(payload)
   let lastStyle = -1
-  for (let i=0; i<29; i++) {
+  for (let i = 0; i < 29; i++) {
     let pick
-    do { pick = rnd(0,2) } while (pick === lastStyle)
+    do { pick = rnd(0, 2) } while (pick === lastStyle)
     lastStyle = pick
     vm = STYLES[pick](vm)
   }
+
+  // Shadow-Sticker como capa envolvente final
+  if (options.shadowSticker !== false) {
+    vm = shadowSticker(vm)
+  }
+
   return vm
 }
 
-// ── Anti-debug header (compact) ──────────────────────────────
+// ── Anti-debug header ────────────────────────────────────────
 function antiDebug() {
   const [T,V] = [gn(),gn()]
   return [
-    // Timing check — detects debugger slowdown
     `local ${T}=os.clock() for _=1,80000 do end if os.clock()-${T}>4 then while true do end end`,
-    // Debug library check
     `if debug~=nil and rawget(debug,"getinfo") then while true do end end`,
-    // Global metatable hook check
     `if getmetatable(_G)~=nil then while true do end end`,
-    // loadstring type check
     `if type(loadstring)~="function" then while true do end end`,
-    // pcall integrity
     `if type(pcall)~="function" then while true do end end`,
-    // math.pi sanity (tamper detection)
     `local ${V}=math.floor(math.pi*1000) if ${V}~=3141 then while true do end end`,
   ].join(' ')
 }
 
 // ── Main export ──────────────────────────────────────────────
-function obfuscate(sourceCode) {
+function obfuscate(sourceCode, options = { shadowSticker: true }) {
   if (!sourceCode || !sourceCode.trim()) return '--ERROR'
 
   let payload
@@ -251,8 +269,8 @@ function obfuscate(sourceCode) {
   )
   payload = urlMatch ? urlMatch[1] : sourceCode
 
-  const vm = buildLayers(payload)
-  return `${HEADER} ${antiDebug()} ${vm}`.replace(/\s+/g,' ').trim()
+  const vm = buildLayers(payload, options)
+  return `${HEADER} ${antiDebug()} ${vm}`.replace(/\s+/g, ' ').trim()
 }
 
 module.exports = { obfuscate }
