@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
+aconst { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
 const { obfuscate } = require('./obfuscator');
 const https = require('https');
 const http = require('http');
@@ -63,7 +63,13 @@ client.on('interactionCreate', async interaction => {
     if (buf.length > 8 * 1024 * 1024) return interaction.editReply('Output too large (>8MB).');
 
     await interaction.editReply({
-      content: 'Your code is now protected, copy and paste.',
+      content: 'Your code is now protected, copy and paste
+      
+•Don't be scared if the file is big, it will be executable
+
+•We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines
+
+•Use it and follow the rules properly.',
       files: [new AttachmentBuilder(buf, { name: 'obfuscated.txt' })]
     });
   } catch (e) {
