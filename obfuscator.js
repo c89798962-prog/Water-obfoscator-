@@ -1,6 +1,7 @@
 /**
- * VVMER OBFUSCATOR - FULL CORE ENGINE
- * Integrated Modes: Normal (18x) & Diabolical (80x)
+ * VVMER OBFUSCATOR - DUAL MODE
+ * Normal: 18x VM + Mapeos + Protecciones estándar
+ * Diabolical: 80x VM + Protecciones extremas
  */
 
 const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`;
@@ -8,7 +9,7 @@ const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`;
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"];
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"];
 
-// --- SHARED UTILITIES ---
+// ==================== FUNCIONES AUXILIARES COMUNES ====================
 
 function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 999999);
@@ -63,7 +64,7 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// --- NORMAL MODE LOGIC (18x VM) ---
+// ==================== MODO NORMAL (18x VM) ====================
 
 function detectAndApplyMappings(code) {
   const MAPEO = {
@@ -169,7 +170,7 @@ function getNormalProtections() {
   return antiDebuggers + codeVaultGuards;
 }
 
-// --- DIABOLICAL MODE LOGIC (80x VM) ---
+// ==================== MODO DIABOLICAL (80x VM) ====================
 
 function getDiabolicalProtections() {
   let protections = `local _clk=os.clock local _t=_clk() for _=1,200000 do end if os.clock()-_t>4.0 then while true do end end `;
@@ -197,13 +198,13 @@ function wrapInVMDiabolical(innerCode) {
   return `local ${DISPATCHER} = function() ${generateJunk(5)} ${innerCode} end local ${STATE}=${heavyMath(1)} while ${STATE}==${heavyMath(1)} do ${STATE}=0 ${DISPATCHER}() end`;
 }
 
-// --- MAIN OBFUSCATE FUNCTION ---
+// ==================== FUNCIÓN PRINCIPAL ====================
 
 function obfuscate(sourceCode, mode = 'normal') {
   if (!sourceCode) return '-- Error: No Source';
 
   if (mode === 'diabolical') {
-    // DIABOLICAL MODE (80x)
+    // MODO DIABOLICAL (80 capas)
     let result = getDiabolicalProtections();
     let currentLayer = buildCoreVMDiabolical(sourceCode);
     for(let i = 0; i < 80; i++) {
@@ -212,7 +213,7 @@ function obfuscate(sourceCode, mode = 'normal') {
     }
     return `${HEADER} ${generateJunk(20)} ${result} ${currentLayer}`.replace(/\s+/g, " ").trim();
   } else {
-    // NORMAL MODE (18x)
+    // MODO NORMAL (18 capas + mapeos)
     const extraProtections = getNormalProtections();
     let payloadToProtect = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
