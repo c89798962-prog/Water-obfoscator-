@@ -98,7 +98,9 @@ client.on('interactionCreate', async interaction => {
             content: `Your code is now protected! (Mode: **${mode.toUpperCase()}**)
 
 • Don't be scared if the file is big, it will be executable.
+
 • We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines.
+
 • Use it and follow the rules properly.`,
             files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })]
         });
