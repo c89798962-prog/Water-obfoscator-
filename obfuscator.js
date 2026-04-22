@@ -3,8 +3,7 @@
  * Normal: 18x VM + Mapeos + Protecciones estándar
  * Diabolical: ULTRA MODE (150 VM frágiles, 40% menos matemáticas, 20 anti-tamper, 246KB)
  * 
- * MODIFICACIÓN: Detecta y ofusca automáticamente TODAS las URLs del código fuente.
- * Cada URL se convierte en 10 líneas al final con identifier mangling + string encoding.
+ * Las 10 líneas finales aplican TODAS las técnicas de ofuscación de forma atómica.
  */
 
 const HEADER = `--[[ this code it's protected by vmmer obfoscator ]]`;
@@ -44,21 +43,74 @@ function applyCFF(blocks) {
   return lua;
 }
 
-// ==================== OFUSCACIÓN DE CADA URL (10 LÍNEAS) ====================
+// ==================== NUEVA GENERACIÓN DE 10 LÍNEAS CON TODAS LAS TÉCNICAS ====================
 
-function obfuscateStringForMode(str, mode) {
-  // Devuelve string.char(...) con cada código ofuscado según el modo
-  const heavyMath = (mode === 'diabolical') ? heavyMathUltra : heavyMathNormal;
-  const codes = str.split('').map(ch => heavyMath(ch.charCodeAt(0)));
-  return `string.char(${codes.join(',')})`;
+// Función para generar un número aleatorio ofuscado con MBA y constant hiding
+function mbaNumber(n, mode) {
+  const heavy = (mode === 'diabolical') ? heavyMathUltra : heavyMathNormal;
+  if (Math.random() > 0.7) return heavy(n);
+  let a = Math.floor(Math.random() * 100) + 1;
+  let b = Math.floor(Math.random() * 50) + 2;
+  let c = Math.floor(Math.random() * 30) + 1;
+  // Mixed Boolean Arithmetic: combinación de operaciones aritméticas y booleanas
+  return `((${heavy(n)} + ${heavy(a)}) * ${heavy(b)} - ${heavy(c)} * (${heavy(b)} - ${heavy(1)}) + ((${heavy(n)} & ${heavy(a)}) | ${heavy(c)}))`;
+}
+
+// Ofusca un string usando XOR + clave dinámica + encoding en base64 falso (porque Lua no tiene base64 nativo, simulamos con charcode)
+function xorEncodeString(str, key) {
+  let encoded = [];
+  for (let i = 0; i < str.length; i++) {
+    encoded.push(str.charCodeAt(i) ^ key);
+  }
+  return encoded;
+}
+
+// Genera una línea ultrapesada con todas las técnicas
+function generateUltraLine(url, mode, lineIndex) {
+  const heavy = (mode === 'diabolical') ? heavyMathUltra : heavyMathNormal;
+  const varName = generateIlName() + (Math.random() > 0.5 ? '_' + Math.random().toString(36).substring(2,5) : '');
+  
+  // Clave dinámica para XOR (varía por línea)
+  const xorKey = Math.floor(Math.random() * 255) + 1;
+  const xorKeyObf = mbaNumber(xorKey, mode);
+  
+  // Codificar URL con XOR
+  const encodedBytes = xorEncodeString(url, xorKey);
+  
+  // Construir tabla de bytes ofuscados (cada byte con MBA)
+  const byteStrings = encodedBytes.map(b => mbaNumber(b, mode));
+  
+  // Tabla de indirección (para ofuscar string.char)
+  const tableName = generateIlName();
+  const stringCharObf = `(function(t) return t[${heavy(1)}] end)({ [${heavy(1)}]=string.char, [${heavy(2)}]=table.concat })`;
+  
+  // Predicado opaco (siempre falso pero parece real)
+  const opaquePred = `(function() local _x=${heavy(Math.random() * 100)}; if _x==_x then return true else return false end end)()`;
+  
+  // Inyección de código muerto dentro de la misma línea usando operador `;` y funciones anónimas
+  const deadCode = `;(function() local _d=${heavy(Math.floor(Math.random()*999))}; if _d==${heavy(-1)} then while true do end end end)()`;
+  
+  // Bogus loop (no hace nada pero añade complejidad)
+  const bogusLoop = `;(function() for _=1,${heavy(0)} do end end)()`;
+  
+  // Expresión inflada: reconstrucción runtime del string
+  // Primero creamos una tabla con los bytes, luego aplicamos XOR inverso, luego unimos con string.char
+  const reconstruction = `(function(k) local t={${byteStrings.join(',')}}; for i=1,#t do t[i]=bit32.bxor(t[i], k) end; return ${stringCharObf}(table.concat(${stringCharObf}(t))) end)(${xorKeyObf})`;
+  
+  // Indirección global: _G[...] en lugar de acceso directo
+  const globalAccess = `_G[${runtimeString("string")}][${runtimeString("char")}]`; // esto es pesado, pero lo simplificamos
+  
+  // Combinamos todo en una sola línea usando operadores ternarios y ejecución diferida
+  // La línea final asigna la variable al resultado de una función anónima que aplica todas las técnicas
+  const finalLine = `local ${varName}=${opaquePred} and (function() ${deadCode} ${bogusLoop} return ${reconstruction} end)() or (function() return "" end)()`;
+  
+  return finalLine;
 }
 
 function generateObfuscatedLinesForUrl(url, mode) {
   let lines = [];
   for (let i = 0; i < 10; i++) {
-    const varName = generateIlName();  // identifier mangling
-    const encodedUrl = obfuscateStringForMode(url, mode);
-    lines.push(`local ${varName}=${encodedUrl}`);
+    lines.push(generateUltraLine(url, mode, i));
   }
   return lines.join(' ');
 }
@@ -276,7 +328,7 @@ function obfuscateDiabolical(sourceCode) {
   let cleanSource = sourceCode;
   for (const url of urls) {
     const regex = new RegExp(`["']${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g');
-    cleanSource = cleanSource.replace(regex, '""'); // Reemplazar por string vacío
+    cleanSource = cleanSource.replace(regex, '""');
   }
 
   const extraProtections = getUltraProtections();
@@ -301,7 +353,7 @@ function obfuscateDiabolical(sourceCode) {
     finalCode = `${HEADER} ${generateJunkUltra(50 + additionalLines)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
   }
 
-  // Añadir las 10 líneas por cada URL encontrada
+  // Añadir las 10 líneas ultrapesadas por cada URL encontrada
   if (urls.length > 0) {
     let allUrlLines = '';
     for (const url of urls) {
@@ -313,7 +365,7 @@ function obfuscateDiabolical(sourceCode) {
   return finalCode;
 }
 
-// ==================== VERSIONES PARA MODO NORMAL (SIN CAMBIOS) ====================
+// ==================== VERSIONES PARA MODO NORMAL ====================
 
 function heavyMathNormal(n) {
   if (Math.random() < 0.3) return n.toString();
@@ -468,7 +520,7 @@ function obfuscateNormal(sourceCode) {
   }
   let finalCode = `${HEADER} ${generateJunkNormal(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
 
-  // Añadir las 10 líneas por cada URL encontrada
+  // Añadir las 10 líneas ultrapesadas por cada URL encontrada
   if (urls.length > 0) {
     let allUrlLines = '';
     for (const url of urls) {
