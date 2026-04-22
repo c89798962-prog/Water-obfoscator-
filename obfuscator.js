@@ -201,7 +201,7 @@ function getUltraProtections() {
 
 // PROFUNDIDAD REDUCIDA DE 200 A 150 (50 VM menos)
 function buildFragileVM(innerCode, depth = 0) {
-  if (depth >= 150) return innerCode;  // <-- Cambio aquí
+  if (depth >= 67) return innerCode;  // <-- Cambio aquí
 
   const vmName = generateIlName();
   const handlerCount = Math.floor(Math.random() * 5) + 3;
