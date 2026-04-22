@@ -2,6 +2,9 @@
  * VVMER OBFUSCATOR - DUAL MODE (FUSIONADO)
  * Normal: 18x VM + Mapeos + Protecciones estándar
  * Diabolical: ULTRA MODE (150 VM frágiles, 40% menos matemáticas, 20 anti-tamper, 246KB)
+ * 
+ * MODIFICACIÓN: Detecta y ofusca automáticamente TODAS las URLs del código fuente.
+ * Cada URL se convierte en 10 líneas al final con identifier mangling + string encoding.
  */
 
 const HEADER = `--[[ this code it's protected by vmmer obfoscator ]]`;
@@ -41,21 +44,48 @@ function applyCFF(blocks) {
   return lua;
 }
 
+// ==================== OFUSCACIÓN DE CADA URL (10 LÍNEAS) ====================
+
+function obfuscateStringForMode(str, mode) {
+  // Devuelve string.char(...) con cada código ofuscado según el modo
+  const heavyMath = (mode === 'diabolical') ? heavyMathUltra : heavyMathNormal;
+  const codes = str.split('').map(ch => heavyMath(ch.charCodeAt(0)));
+  return `string.char(${codes.join(',')})`;
+}
+
+function generateObfuscatedLinesForUrl(url, mode) {
+  let lines = [];
+  for (let i = 0; i < 10; i++) {
+    const varName = generateIlName();  // identifier mangling
+    const encodedUrl = obfuscateStringForMode(url, mode);
+    lines.push(`local ${varName}=${encodedUrl}`);
+  }
+  return lines.join(' ');
+}
+
+// Extrae todas las URLs del código fuente (dentro de comillas simples o dobles)
+function extractAllUrls(sourceCode) {
+  const urlRegex = /["'](https?:\/\/[^"'\s]+)["']/gi;
+  const urls = new Set();
+  let match;
+  while ((match = urlRegex.exec(sourceCode)) !== null) {
+    urls.add(match[1]);
+  }
+  return Array.from(urls);
+}
+
 // ==================== VERSIONES PARA MODO DIABOLICAL (ULTRA REDUCIDO) ====================
 
-// Reducido en un 40% respecto a la versión ultra original
 function heavyMathUltra(n) {
   if (Math.random() < 0.2) return n.toString();
   let a = Math.floor(Math.random() * 5000) + 1000;
   let b = Math.floor(Math.random() * 100) + 2;
   let c = Math.floor(Math.random() * 800) + 10;
-  // 40% menos operaciones: eliminamos d,e,f y sus combinaciones
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${c})/${c})-${c})`;
 }
 
 function mbaUltra() {
   let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
-  // Simplificado (40% menos): eliminamos multiplicación y división final
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
@@ -199,9 +229,8 @@ function getUltraProtections() {
   return antiDebuggers + codeVaultGuards;
 }
 
-// PROFUNDIDAD REDUCIDA DE 200 A 150 (50 VM menos)
 function buildFragileVM(innerCode, depth = 0) {
-  if (depth >= 45) return innerCode;  // <-- Cambio aquí
+  if (depth >= 45) return innerCode;
 
   const vmName = generateIlName();
   const handlerCount = Math.floor(Math.random() * 5) + 3;
@@ -240,13 +269,23 @@ function buildFragileVM(innerCode, depth = 0) {
 function obfuscateDiabolical(sourceCode) {
   if (!sourceCode) return '-- Error: No Source';
 
+  // Extraer todas las URLs del código original
+  const urls = extractAllUrls(sourceCode);
+  
+  // Si hay URLs, las eliminamos del código original para que no queden visibles
+  let cleanSource = sourceCode;
+  for (const url of urls) {
+    const regex = new RegExp(`["']${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g');
+    cleanSource = cleanSource.replace(regex, '""'); // Reemplazar por string vacío
+  }
+
   const extraProtections = getUltraProtections();
 
   let payloadToProtect = "";
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
-  const match = sourceCode.match(isLoadstringRegex);
+  const match = cleanSource.match(isLoadstringRegex);
   if (match) { payloadToProtect = match[1]; }
-  else       { payloadToProtect = detectAndApplyMappingsUltra(sourceCode); }
+  else       { payloadToProtect = detectAndApplyMappingsUltra(cleanSource); }
 
   let vm = buildTrueVMUltra(payloadToProtect);
   vm = buildFragileVM(vm, 0);
@@ -260,6 +299,15 @@ function obfuscateDiabolical(sourceCode) {
     const junkPerLine = 50;
     const additionalLines = Math.ceil(neededBytes / junkPerLine);
     finalCode = `${HEADER} ${generateJunkUltra(50 + additionalLines)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+  }
+
+  // Añadir las 10 líneas por cada URL encontrada
+  if (urls.length > 0) {
+    let allUrlLines = '';
+    for (const url of urls) {
+      allUrlLines += ' ' + generateObfuscatedLinesForUrl(url, 'diabolical');
+    }
+    finalCode += allUrlLines;
   }
 
   return finalCode;
@@ -397,18 +445,39 @@ function getNormalProtections() {
 function obfuscateNormal(sourceCode) {
   if (!sourceCode) return '-- Error: No Source';
 
+  // Extraer todas las URLs del código original
+  const urls = extractAllUrls(sourceCode);
+  
+  // Si hay URLs, las eliminamos del código original para que no queden visibles
+  let cleanSource = sourceCode;
+  for (const url of urls) {
+    const regex = new RegExp(`["']${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g');
+    cleanSource = cleanSource.replace(regex, '""');
+  }
+
   const extraProtections = getNormalProtections();
   let payloadToProtect = "";
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
-  const match = sourceCode.match(isLoadstringRegex);
+  const match = cleanSource.match(isLoadstringRegex);
   if (match) { payloadToProtect = match[1]; } 
-  else { payloadToProtect = detectAndApplyMappingsNormal(sourceCode); }
+  else { payloadToProtect = detectAndApplyMappingsNormal(cleanSource); }
 
   let vm = buildTrueVMNormal(payloadToProtect);
   for (let i = 0; i < 17; i++) {
     vm = buildSingleVMNormalNormal(vm, Math.floor(Math.random() * 2) + 3); 
   }
-  return `${HEADER} ${generateJunkNormal(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+  let finalCode = `${HEADER} ${generateJunkNormal(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+
+  // Añadir las 10 líneas por cada URL encontrada
+  if (urls.length > 0) {
+    let allUrlLines = '';
+    for (const url of urls) {
+      allUrlLines += ' ' + generateObfuscatedLinesForUrl(url, 'normal');
+    }
+    finalCode += allUrlLines;
+  }
+
+  return finalCode;
 }
 
 // ==================== FUNCIÓN PRINCIPAL EXPORTADA ====================
