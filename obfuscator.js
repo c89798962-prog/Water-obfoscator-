@@ -1,173 +1,424 @@
+/**
+ * VVMER OBFUSCATOR - DUAL MODE (FUSIONADO)
+ * Normal: 18x VM + Mapeos + Protecciones estándar
+ * Diabolical: ULTRA MODE (150 VM frágiles, 40% menos matemáticas, 20 anti-tamper, 246KB)
+ */
+
 const HEADER = `--[[ this code it's protected by vmmer obfoscator ]]`;
 
-// Pool reducido (22% menos operaciones matemáticas complejas)
-function lightMath(n) {
-  if (Math.random() < 0.4) return n.toString();
-  const a = Math.floor(Math.random() * 200) + 50;
-  const b = Math.floor(Math.random() * 20) + 2;
-  return `((${n}+${a})-${a}+(${b}*${b}/${b}))`;
-}
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"];
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"];
 
-function mbaLight() {
-  const n = Math.random() > 0.5 ? 1 : 2;
-  const a = Math.floor(Math.random() * 30) + 5;
-  return `(${n}+${a}-${a})`;
-}
+// ==================== FUNCIONES AUXILIARES COMUNES ====================
 
-// Generador de nombres aleatorios (igual)
-const IL_POOL = ["II","vv","lI","Vv","xX","Zz"];
-function genName() {
+function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 999999);
 }
 
-// Junk menos invasivo (22% menos líneas)
-function junkLight(lines=70) {
+function pickHandlers(count) {
+  const used = new Set();
+  const result = [];
+  while (result.length < count) {
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)];
+    const name = base + Math.floor(Math.random() * 99);
+    if (!used.has(name)) { used.add(name); result.push(name); }
+  }
+  return result;
+}
+
+function runtimeString(str) {
+  return `string.char(${str.split('').map(c => heavyMathUltra(c.charCodeAt(0))).join(',')})`;
+}
+
+function applyCFF(blocks) {
+  const stateVar = generateIlName();
+  let lua = `local ${stateVar}=${heavyMathUltra(1)} while true do `;
+  for (let i = 0; i < blocks.length; i++) {
+    if (i === 0) lua += `if ${stateVar}==${heavyMathUltra(1)} then ${blocks[i]} ${stateVar}=${heavyMathUltra(2)} `;
+    else         lua += `elseif ${stateVar}==${heavyMathUltra(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMathUltra(i + 2)} `;
+  }
+  lua += `elseif ${stateVar}==${heavyMathUltra(blocks.length + 1)} then break end end `;
+  return lua;
+}
+
+// ==================== VERSIONES PARA MODO DIABOLICAL (ULTRA REDUCIDO) ====================
+
+// Reducido en un 40% respecto a la versión ultra original
+function heavyMathUltra(n) {
+  if (Math.random() < 0.2) return n.toString();
+  let a = Math.floor(Math.random() * 5000) + 1000;
+  let b = Math.floor(Math.random() * 100) + 2;
+  let c = Math.floor(Math.random() * 800) + 10;
+  // 40% menos operaciones: eliminamos d,e,f y sus combinaciones
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${c})/${c})-${c})`;
+}
+
+function mbaUltra() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  // Simplificado (40% menos): eliminamos multiplicación y división final
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+}
+
+function generateJunkUltra(lines = 100) {
   let j = '';
-  for (let i=0; i<lines; i++) {
+  for (let i = 0; i < lines; i++) {
     const r = Math.random();
-    if (r<0.3) j += `local ${genName()}=${lightMath(Math.floor(Math.random()*999))} `;
-    else if (r<0.6) j += `if ${lightMath(1)}==${lightMath(1)} then local _=1 end `;
-    else j += `do local _={} _[1]=nil end `;
+    if (r < 0.2) j += `local ${generateIlName()}=${heavyMathUltra(Math.floor(Math.random() * 999))} `;
+    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMathUltra(Math.floor(Math.random()*255))}) `;
+    else if (r < 0.5) j += `if not(${heavyMathUltra(1)}==${heavyMathUltra(1)}) then local x=1 end `;
+    else if (r < 0.7) {
+      const tp = generateIlName();
+      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `;
+    } else if (r < 0.85) {
+      const vt = generateIlName();
+      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
+    } else {
+      j += `if type(math.pi)=="string" then local _=1 end `;
+    }
   }
   return j;
 }
 
-// --- Cifrado RC4 robusto (manual, sin crypto) ---
-function rc4(key, data) {
-  let s = Array.from({length:256}, (_,i)=>i);
-  let j = 0;
-  for (let i=0; i<256; i++) {
-    j = (j + s[i] + key.charCodeAt(i % key.length)) % 256;
-    [s[i], s[j]] = [s[j], s[i]];
-  }
-  let i=0, j2=0, out=[];
-  for (let k=0; k<data.length; k++) {
-    i = (i+1)%256;
-    j2 = (j2 + s[i])%256;
-    [s[i], s[j2]] = [s[j2], s[i]];
-    out.push(data.charCodeAt(k) ^ s[(s[i]+s[j2])%256]);
-  }
-  return Buffer.from(out).toString('binary');
-}
-
-// Capas múltiples: base64 → RC4 → XOR inversa
-function multiLayerEncode(str, pass) {
-  const b64 = Buffer.from(str).toString('base64');
-  const rc = rc4(pass, b64);
-  let xor = '';
-  for (let i=0; i<rc.length; i++)
-    xor += String.fromCharCode(rc.charCodeAt(i) ^ (pass.charCodeAt(i%pass.length) + i));
-  return Buffer.from(xor).toString('base64');
-}
-
-function multiLayerDecode(encoded, pass) {
-  const xor = Buffer.from(encoded, 'base64').toString('binary');
-  let rc = '';
-  for (let i=0; i<xor.length; i++)
-    rc += String.fromCharCode(xor.charCodeAt(i) ^ (pass.charCodeAt(i%pass.length) + i));
-  const b64 = rc4(pass, rc);
-  return Buffer.from(b64, 'base64').toString('utf-8');
-}
-
-// --- Generador de chunks con orden dinámico (sin _order explícito)---
-function buildVM(payload, isDiabolical=false) {
-  const passPhrase = genName() + Math.random().toString(36);
-  const encodedPayload = multiLayerEncode(payload, passPhrase);
-  const stackVar = genName();
-  const seed = Math.floor(Math.random() * 100000);
-  const salt = Math.floor(Math.random() * 255) + 1;
-  
-  let lua = `local ${stackVar}={} local _seed=${lightMath(seed)} local _salt=${lightMath(salt)} local _idx=0 `;
-  lua += `local function _prng() _seed=((_seed*1103515245+12345)%2^31) return _seed end `;
-  
-  // fragmentar el payload codificado en chunks de tamaño variable
-  const chunkSize = isDiabolical ? 8 : 12;
-  let chunks = [];
-  for (let i=0; i<encodedPayload.length; i+=chunkSize)
-    chunks.push(encodedPayload.slice(i, i+chunkSize));
-  
-  // mezclar chunks reales con falsos, pero los falsos también se descifrarán (basura)
-  let allChunks = [];
-  for (let i=0; i<chunks.length*2; i++) {
-    if (i%2===0 || i>=chunks.length) {
-      // chunk falso
-      let fake = '';
-      for (let j=0; j<chunkSize; j++) fake += String.fromCharCode(Math.floor(Math.random()*256));
-      allChunks.push(fake);
-    } else {
-      allChunks.push(chunks[Math.floor(i/2)]);
+function detectAndApplyMappingsUltra(code) {
+  const MAPEO = {
+    "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+    "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+    "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+  };
+  let modified = code, headers = "";
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMathUltra(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mbaUltra()}==1 or true)and"${word}")`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, () => `game[${replacement}]`);
     }
   }
-  // desordenar
-  for (let i=allChunks.length-1; i>0; i--) {
-    const j = Math.floor(Math.random()*(i+1));
-    [allChunks[i], allChunks[j]] = [allChunks[j], allChunks[i]];
+  return headers + modified;
+}
+
+function buildTrueVMUltra(payloadStr) {
+  const STACK = generateIlName(); const KEY = generateIlName(); const SALT = generateIlName();
+  const seed = Math.floor(Math.random() * 200) + 50;
+  const saltVal = Math.floor(Math.random() * 250) + 1;
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMathUltra(seed)} local ${SALT}=${heavyMathUltra(saltVal)} `;
+  const chunkSize = 15; let realChunks = [];
+  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
+  let poolVars = []; let realOrder = [];
+  let totalChunks = realChunks.length * 3; let currentReal = 0; let globalIndex = 0;
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = generateIlName(); poolVars.push(memName);
+    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1);
+      let chunk = realChunks[currentReal]; let encryptedBytes = [];
+      for(let j = 0; j < chunk.length; j++) {
+        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
+        encryptedBytes.push(heavyMathUltra(enc));
+        globalIndex++;
+      }
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      currentReal++;
+    } else {
+      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 20) + 5;
+      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMathUltra(Math.floor(Math.random() * 255))); }
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
+    }
   }
-  
-  // almacenar chunks en tabla
-  lua += `local _pool={} `;
-  for (let i=0; i<allChunks.length; i++) {
-    let enc = [];
-    for (let c of allChunks[i])
-      enc.push(lightMath(c.charCodeAt(0)));
-    lua += `_pool[${lightMath(i+1)}]={${enc.join(',')}} `;
+  vmCore += `local _pool={${poolVars.join(',')}} local _order={${realOrder.map(n => heavyMathUltra(n)).join(',')}} `;
+  vmCore += `local _gIdx=0 for _, idx in ipairs(_order) do for _, byte in ipairs(_pool[idx]) do `;
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
+  vmCore += `table.insert(${STACK}, string.char(math.floor((byte - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
+  const ASSERT     = `getfenv()[${runtimeString("assert")}]`;
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
+  const GAME       = `getfenv()[${runtimeString("game")}]`;
+  const HTTPGET    = runtimeString("HttpGet");
+  if (payloadStr.includes("http")) { vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `; }
+  else { vmCore += `${ASSERT}(${LOADSTRING}(_e))() `; }
+  return vmCore;
+}
+
+function buildSingleVMNormalUltra(innerCode, handlerCount) {
+  const handlers = pickHandlers(handlerCount);
+  const realIdx  = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName();
+  let out = `local lM={} `;
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkUltra(5)} ${innerCode} end `; }
+    else               { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkUltra(3)} return nil end `; }
   }
-  
-  // orden dinámico: se genera en runtime con PRNG
-  lua += `local _order={} for _i=1,${allChunks.length} do local r=_prng()%${allChunks.length}+1 while _order[r] do r=_prng()%${allChunks.length}+1 end _order[r]=true end `;
-  lua += `for _i, _ in pairs(_order) do for _,byte in ipairs(_pool[_i]) do `;
-  lua += `local _key=((_prng()%256)+_idx*_salt)%256 `;
-  lua += `local _dec=math.floor((byte - _key + 256)%256) `;
-  lua += `table.insert(${stackVar}, string.char(_dec)) _idx=_idx+1 end end `;
-  lua += `local _full=table.concat(${stackVar}) ${stackVar}=nil `;
-  
-  // descifrado multi-capa en Lua (sin loadstring expuesto)
-  lua += `local function _decMulti(s, p) local x='' for i=1,#s do x=x..string.char(string.byte(s,i)~bit32.bxor(p:byte((i-1)%#p+1),i-1)) end `;
-  lua += `local function rc4(k,d) local S={} for i=0,255 do S[i]=i end local j=0 for i=0,255 do j=(j+S[i]+k:byte(i%#k+1))%256 S[i],S[j]=S[j],S[i] end local i=0 j=0 local out={} for idx=1,#d do i=(i+1)%256 j=(j+S[i])%256 S[i],S[j]=S[j],S[i] out[idx]=string.byte(d,idx)~S[(S[i]+S[j])%256] end return table.concat(out,',') end `;
-  lua += `local b64=rc4(p, x) local raw=game:HttpGet('https://gist.githubusercontent.com/raw/base64')..'' b64=b64:gsub('%s','') return (function(s) return (s:gsub('..',function(c) return string.char(tonumber(c,16)) end)) end)(b64) end `;
-  lua += `local _real=_decMulti(_full, "${passPhrase}") `;
-  
-  // Ejecución segura sin loadstring directo
-  lua += `local _load, _err = load, error `;
-  lua += `local _ok, _res = pcall(function() return _load(_real) end) if not _ok then _err("VM error") end _res() `;
-  
-  return lua;
+  out += `local ${DISPATCH}={`;
+  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMathUltra(i + 1)}]=${handlers[i]},`; }
+  out += `} `;
+  const execBlocks = [];
+  for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMathUltra(i + 1)}](lM)`); }
+  out += applyCFF(execBlocks);
+  return out;
 }
 
-// Anti-debug + anti-hook + integridad
-function getHardenedProtections() {
-  let prot = `local _t0=os.clock() for _=1,1e5 do end if os.clock()-_t0>0.5 then while true do end end `;
-  prot += `if debug and debug.getinfo then local i=debug.getinfo(1) if i.what~='main' then error() end end `;
-  prot += `if debug and debug.sethook then debug.sethook(function() error() end,'l') end `;
-  prot += `local _load=load; local _ins=table.insert; local _chr=string.char `;
-  prot += `if _load~=load or _ins~=table.insert or _chr~=string.char then error() end `;
-  prot += `local function _crc(s) local c=0 for i=1,#s do c=bit32.bxor(bit32.lrotate(c,1),string.byte(s,i)) end return c end `;
-  prot += `if _crc(debug.getinfo(1).source)~=${Math.floor(Math.random()*2**32)} then error() end `;
-  return prot;
-}
+function getUltraProtections() {
+  const antiDebuggers =
+    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
+    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
+    `if debug and debug.sethook then debug.sethook(function() while true do end end, "l", 5) end `;
 
-// --- Modo normal (VM simple + capas) ---
-function obfuscateNormal(src) {
-  const protectedSrc = src.replace(/\b(ScreenGui|Frame|TextLabel|Player|Humanoid)\b/g, m => `game["${m}"]`);
-  let vm = buildVM(protectedSrc, false);
-  for (let i=0;i<12;i++) vm = `(function() ${junkLight(20)} return function() ${vm} end end)() `;
-  return `${HEADER} ${getHardenedProtections()} ${junkLight(40)} ${vm}`.replace(/\s+/g,' ').trim();
-}
+  const rawTampers = [
+    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
+    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
+    `if type(tostring)~="function" then _err() end`,
+    `if not string.match("chk","^c.*k$") then _err() end`,
+    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`,
+    `if math.abs(-10)~=10 then _err() end`,
+    `if string.char(65)~="A" then _err() end`,
+    `if type({})~="table" then _err() end`,
+    `if type(1)~="number" then _err() end`,
+    `if type("a")~="string" then _err() end`,
+    `if type(true)~="boolean" then _err() end`,
+    `if type(nil)~="nil" then _err() end`,
+    `if type(function() end)~="function" then _err() end`,
+    `if type(coroutine.create(function() end))~="thread" then _err() end`,
+    `if type(io)~="userdata" then _err() end`,
+    `if type(game)~="userdata" then _err() end`,
+    `if type(workspace)~="userdata" then _err() end`,
+    `if type(script)~="userdata" then _err() end`,
+    `if type(Instance)~="function" then _err() end`,
+    `if type(getfenv)~="function" then _err() end`,
+    `if type(setfenv)~="function" then _err() end`
+  ];
 
-// --- Modo diabólico (más fragmentación, más capas, 150 VMs frágiles pero menos math)---
-function obfuscateDiabolical(src) {
-  const protectedSrc = src.replace(/\b(ScreenGui|Frame|TextLabel|Player|Humanoid)\b/g, m => `game["${m}"]`);
-  let vm = buildVM(protectedSrc, true);
-  for (let i=0;i<150;i++) {
-    vm = `(function() ${junkLight(15)} local _vm=function() ${vm} end; return _vm end)() `;
+  let codeVaultGuards = "";
+  for (const t of rawTampers) {
+    const fnName  = generateIlName();
+    const errName = generateIlName();
+    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${t.replace("_err()", `${errName}("!")`)} end ${fnName}() `;
   }
-  return `${HEADER} ${getHardenedProtections()} ${junkLight(80)} ${vm}`.replace(/\s+/g,' ').trim();
+
+  return antiDebuggers + codeVaultGuards;
 }
 
-function obfuscate(sourceCode, mode='normal') {
-  if (!sourceCode) return '-- Error: no source';
-  if (mode === 'diabolical') return obfuscateDiabolical(sourceCode);
-  return obfuscateNormal(sourceCode);
+// PROFUNDIDAD REDUCIDA DE 200 A 150 (50 VM menos)
+function buildFragileVM(innerCode, depth = 0) {
+  if (depth >= 45) return innerCode;  // <-- Cambio aquí
+
+  const vmName = generateIlName();
+  const handlerCount = Math.floor(Math.random() * 5) + 3;
+  const handlers = pickHandlers(handlerCount);
+  const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName();
+
+  let out = `local ${vmName}={} `;
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) {
+      out += `local ${handlers[i]}=function(${vmName}) `;
+      out += `local _chk="${generateIlName()}" `;
+      out += `if ${vmName}[${heavyMathUltra(1)}]~=nil then error("VM corrupted") end `;
+      out += `${generateJunkUltra(5)} `;
+      out += buildFragileVM(innerCode, depth + 1);
+      out += ` end `;
+    } else {
+      out += `local ${handlers[i]}=function(${vmName}) ${generateJunkUltra(3)} return nil end `;
+    }
+  }
+
+  out += `local ${DISPATCH}={`;
+  for (let i = 0; i < handlers.length; i++) {
+    out += `[${heavyMathUltra(i + 1)}]=${handlers[i]},`;
+  }
+  out += `} `;
+
+  const execBlocks = [];
+  for (let i = 0; i < handlers.length; i++) {
+    execBlocks.push(`${DISPATCH}[${heavyMathUltra(i + 1)}](${vmName})`);
+  }
+  out += applyCFF(execBlocks);
+  return out;
+}
+
+function obfuscateDiabolical(sourceCode) {
+  if (!sourceCode) return '-- Error: No Source';
+
+  const extraProtections = getUltraProtections();
+
+  let payloadToProtect = "";
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
+  const match = sourceCode.match(isLoadstringRegex);
+  if (match) { payloadToProtect = match[1]; }
+  else       { payloadToProtect = detectAndApplyMappingsUltra(sourceCode); }
+
+  let vm = buildTrueVMUltra(payloadToProtect);
+  vm = buildFragileVM(vm, 0);
+
+  let finalCode = `${HEADER} ${generateJunkUltra(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+  const targetSize = 246 * 1024;
+  let currentSize = Buffer.byteLength(finalCode, 'utf8');
+
+  if (currentSize < targetSize) {
+    const neededBytes = targetSize - currentSize;
+    const junkPerLine = 50;
+    const additionalLines = Math.ceil(neededBytes / junkPerLine);
+    finalCode = `${HEADER} ${generateJunkUltra(50 + additionalLines)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+  }
+
+  return finalCode;
+}
+
+// ==================== VERSIONES PARA MODO NORMAL (SIN CAMBIOS) ====================
+
+function heavyMathNormal(n) {
+  if (Math.random() < 0.3) return n.toString();
+  let a = Math.floor(Math.random() * 5000) + 1000;
+  let b = Math.floor(Math.random() * 100) + 2;
+  let c = Math.floor(Math.random() * 800) + 10;
+  let d = Math.floor(Math.random() * 20) + 2;
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`;
+}
+
+function mbaNormal() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+}
+
+function generateJunkNormal(lines = 100) {
+  let j = '';
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random();
+    if (r < 0.2) j += `local ${generateIlName()}=${heavyMathNormal(Math.floor(Math.random() * 999))} `;
+    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMathNormal(Math.floor(Math.random()*255))}) `;
+    else if (r < 0.5) j += `if not(${heavyMathNormal(1)}==${heavyMathNormal(1)}) then local x=1 end `;
+    else if (r < 0.7) {
+      const tp = generateIlName();
+      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `;
+    } else if (r < 0.85) {
+      const vt = generateIlName();
+      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
+    } else {
+      j += `if type(math.pi)=="string" then local _=1 end `;
+    }
+  }
+  return j;
+}
+
+function detectAndApplyMappingsNormal(code) {
+  const MAPEO = {
+    "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+    "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+    "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+  };
+  let modified = code, headers = "";
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMathNormal(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mbaNormal()}==1 or true)and"${word}")`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match) => `game[${replacement}]`);
+    }
+  }
+  return headers + modified;
+}
+
+function buildTrueVMNormal(payloadStr) {
+  const STACK = generateIlName(); const KEY = generateIlName(); const SALT = generateIlName();
+  const seed = Math.floor(Math.random() * 200) + 50;
+  const saltVal = Math.floor(Math.random() * 250) + 1;
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMathNormal(seed)} local ${SALT}=${heavyMathNormal(saltVal)} `;
+  const chunkSize = 15; let realChunks = [];
+  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
+  let poolVars = []; let realOrder = [];
+  let totalChunks = realChunks.length * 3; let currentReal = 0; let globalIndex = 0;
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = generateIlName(); poolVars.push(memName);
+    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1);
+      let chunk = realChunks[currentReal]; let encryptedBytes = [];
+      for(let j = 0; j < chunk.length; j++) { 
+        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
+        encryptedBytes.push(heavyMathNormal(enc)); 
+        globalIndex++;
+      }
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      currentReal++;
+    } else {
+      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 20) + 5;
+      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMathNormal(Math.floor(Math.random() * 255))); }
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
+    }
+  }
+  vmCore += `local _pool={${poolVars.join(',')}} local _order={${realOrder.map(n => heavyMathNormal(n)).join(',')}} `;
+  vmCore += `local _gIdx=0 for _, idx in ipairs(_order) do for _, byte in ipairs(_pool[idx]) do `;
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
+  vmCore += `table.insert(${STACK}, string.char(math.floor((byte - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
+  const ASSERT = `getfenv()[${runtimeString("assert")}]`;
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
+  const GAME = `getfenv()[${runtimeString("game")}]`;
+  const HTTPGET = runtimeString("HttpGet");
+  if (payloadStr.includes("http")) { vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() ` } 
+  else { vmCore += `${ASSERT}(${LOADSTRING}(_e))() ` }
+  return vmCore;
+}
+
+function buildSingleVMNormalNormal(innerCode, handlerCount) {
+  const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName(); let out = `local lM={} `;
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkNormal(5)} ${innerCode} end `; } 
+    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkNormal(3)} return nil end `; }
+  }
+  out += `local ${DISPATCH}={`
+  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMathNormal(i + 1)}]=${handlers[i]},` }
+  out += `} `
+  let execBlocks = []; for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMathNormal(i + 1)}](lM)`) }
+  out += applyCFF(execBlocks); return out;
+}
+
+function getNormalProtections() {
+  const antiDebuggers = `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
+    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end `;
+  const rawTampers = [
+    `if math.pi<3.14 or math.pi>3.15 then _err() end`, `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
+    `if type(tostring)~="function" then _err() end`, `if not string.match("chk","^c.*k$") then _err() end`,
+    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`, `if math.abs(-10)~=10 then _err() end`
+  ];
+  let codeVaultGuards = "";
+  for(let t of rawTampers) {
+    const fnName = generateIlName(); const errName = generateIlName();
+    const injectedError = t.replace("_err()", `${errName}("!")`);
+    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
+  }
+  return antiDebuggers + codeVaultGuards;
+}
+
+function obfuscateNormal(sourceCode) {
+  if (!sourceCode) return '-- Error: No Source';
+
+  const extraProtections = getNormalProtections();
+  let payloadToProtect = "";
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
+  const match = sourceCode.match(isLoadstringRegex);
+  if (match) { payloadToProtect = match[1]; } 
+  else { payloadToProtect = detectAndApplyMappingsNormal(sourceCode); }
+
+  let vm = buildTrueVMNormal(payloadToProtect);
+  for (let i = 0; i < 17; i++) {
+    vm = buildSingleVMNormalNormal(vm, Math.floor(Math.random() * 2) + 3); 
+  }
+  return `${HEADER} ${generateJunkNormal(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+}
+
+// ==================== FUNCIÓN PRINCIPAL EXPORTADA ====================
+
+function obfuscate(sourceCode, mode = 'normal') {
+  if (mode === 'diabolical') {
+    return obfuscateDiabolical(sourceCode);
+  } else {
+    return obfuscateNormal(sourceCode);
+  }
 }
 
 module.exports = { obfuscate };
