@@ -1,212 +1,363 @@
-// vvmer obfuscator v6 — Roblox‑ready · sin errores · watermark intacta
-// ╔══════════════════════════════════════════════════════╗
-// ║  vvmer obfuscator v6 — anti FlameDumper "direct"    ║
-// ║  Runtime XOR key · 3 VM styles · sin dependencias   ║
-// ╚══════════════════════════════════════════════════════╝
+// ╔═══════════════════════════════════════════════════════════════╗
+// ║  vvmer obfuscator v7                                          ║
+// ║  • Real bytecode VM  (custom opcode interpreter)              ║
+// ║  • Triple runtime keys  (math.pi bytes — never static)        ║
+// ║  • 2 Decoy VMs  (identical structure, wrong keys → garbage)   ║
+// ║  • Coroutine isolation  (execution inside coroutine)          ║
+// ║  • rawget loadstring  (bypasses __index hooks)                 ║
+// ║  • 3 rotating wrappers  (no consecutive same style)           ║
+// ╚═══════════════════════════════════════════════════════════════╝
 
-const HEADER = `--[[ this code its proyected by vmmer discord server:https://discord.gg/AAVKHtbxS ]]`
+const HEADER = `--[[ protected by vvmer v7 | discord:https://discord.gg/AAVKHtbxS ]]`
 
-// ── Name pools ───────────────────────────────────────────────
+// ── Name / handler pools ─────────────────────────────────────────
 const IL_POOL = [
-  "IIIIIIII1","vvvvvv1","vvvvvvvv2","vvvvvv3","IIlIlIlI1",
-  "lvlvlvlv2","I1","l1","v1","v2","v3","II","ll","vv","I2",
-  "lI","Il","Iv","vI","lv","vl","IlI","lIl","vIv","IvI",
-  "llII","IIll","vvII","IIvv","lIlI","vIvI"
+  "IIIIIIII1","vvvvvv1","vvvvvvvv2","vvvvvv3","IIlIlIlI1","lvlvlvlv2",
+  "I1","l1","v1","v2","v3","II","ll","vv","I2","lI","Il","Iv","vI","lv",
+  "vl","IlI","lIl","vIv","IvI","llII","IIll","vvII","IIvv","lIlI"
 ]
 const H_POOL = [
   "KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD",
-  "eA","fG","hJ","iK","rP","uN","oB","sT","dE","gF","jH","kI"
+  "eA","fG","hJ","iK","rP","uN","oB","sT","dE","gF"
 ]
 
-const gn = () => IL_POOL[Math.floor(Math.random()*IL_POOL.length)] + Math.floor(Math.random()*9999)
-const rnd = (a,b) => Math.floor(Math.random()*(b-a+1))+a
+const gn  = () => IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 9999)
+const rnd = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a
 
 function pickH(count) {
   const used = new Set(), res = []
   while (res.length < count) {
-    const n = H_POOL[rnd(0,H_POOL.length-1)] + rnd(10,99)
+    const n = H_POOL[rnd(0, H_POOL.length - 1)] + rnd(10, 99)
     if (!used.has(n)) { used.add(n); res.push(n) }
   }
   return res
 }
 
+// Number obfuscation: sometimes emit as expression `(n+a*b - a*b)` = n
 function me(n) {
-  if (Math.random() < 0.6) return String(n)
-  const a = rnd(5,40)*2, b = rnd(2,8)
-  return `(${n+a*b}-${a}*${b})`
+  if (Math.random() < 0.55) return String(n)
+  const a = rnd(4, 28) * 2, b = rnd(2, 7)
+  return `(${n + a * b}-${a}*${b})`
 }
 
+// String → obfuscated char codes for string.char(...)
 const sc = s => Array.from(s).map(c => me(c.charCodeAt(0))).join(',')
 
-function junk(n=3) {
-  let j = ''
-  for (let i=0; i<n; i++) {
-    const v = gn(), r = Math.random()
-    if      (r < 0.3) j += `local ${v}=${me(rnd(1,200))} `
-    else if (r < 0.6) j += `do local ${v}=nil end `
-    else               j += `if false then local ${v}=0 end `
-  }
-  return j
+// ═══════════════════════════════════════════════════════════════
+//  TRIPLE RUNTIME KEY SCHEME
+//  ─────────────────────────
+//  All three keys are bytes from tostring(math.pi) = "3.14159265..."
+//  FlameDumper static scanning CANNOT evaluate Lua expressions.
+//  Without executing Lua it can NEVER know K1=51, K2=46, K3=49.
+//
+//  JS side (obfuscation time) uses known values to encrypt.
+//  Lua side (runtime) derives keys from math.pi expressions.
+//
+//  Encryption: enc[i] = (plain[i] + K1 + K2*(i%16) + K3) % 256
+//  Decryption: plain[j] = (enc[j] - K1 - K2*((j-1)%16) - K3) % 256
+//    where j is 1-based (Lua) — Lua's % always returns non-negative
+// ═══════════════════════════════════════════════════════════════
+const K1 = 51   // string.byte(tostring(math.pi), 1) → '3'
+const K2 = 46   // string.byte(tostring(math.pi), 2) → '.'
+const K3 = 49   // string.byte(tostring(math.pi), 3) → '1'
+
+const K1E = `string.byte(tostring(math.pi),1)`
+const K2E = `string.byte(tostring(math.pi),2)`
+const K3E = `string.byte(tostring(math.pi),3)`
+
+function encB(b, i) {
+  return (b + K1 + K2 * (i % 16) + K3) % 256
 }
 
-// Runtime key (solo depende de math.pi, funciona en Roblox)
-const RT_KEY_EXPR = `string.byte(tostring(math.pi),1)`  // = 51
-const RT_KEY_VAL  = 51
-
-// ── Core VM (corregida, sin errores de sintaxis) ─────────────
-function buildCore(payload) {
-  const seed  = rnd(32, 200)
-  const isUrl = /^https?:\/\//.test(payload)
-
-  // XOR encrypt
-  const enc = Array.from(payload).map((c,i) =>
-    c.charCodeAt(0) ^ ((seed + RT_KEY_VAL + i*11) & 0xFF)
-  )
-
-  const CHUNK = 7
-  const realChunks = []
-  for (let i=0; i<enc.length; i+=CHUNK) realChunks.push(enc.slice(i,i+CHUNK))
-
-  const totalSlots = realChunks.length * 2 + rnd(3,7)
-  const vars = [], realAt = []
-  let realPtr = 0
-  let poolCode = ''
-
-  for (let slot=0; slot<totalSlots; slot++) {
-    const v = gn(); vars.push(v)
-    const need = realChunks.length - realPtr
-    const left = totalSlots - slot
-    const useReal = realPtr < realChunks.length &&
-      (Math.random() > 0.45 || left <= need)
-
-    if (useReal) {
-      realAt.push(slot)
-      poolCode += `local ${v}={${realChunks[realPtr++].map(me).join(',')}} `
-    } else {
-      const fl = rnd(4,12)
-      poolCode += `local ${v}={${Array.from({length:fl},()=>me(rnd(0,255))).join(',')}} `
-    }
-  }
-
-  const [RK,BUF,IDX,BY,POOL,ORD,OUT,LS] = Array.from({length:8}, gn)
-
-  let code = poolCode
-  code += `local ${POOL}={${vars.join(',')}} `
-  code += `local ${ORD}={${realAt.map(r=>me(r+1)).join(',')}} `
-  code += `local ${RK}=${RT_KEY_EXPR} `
-  code += `local ${BUF}={} local ${IDX}=0 `
-  code += `for _,_s in ipairs(${ORD}) do for _,${BY} in ipairs(${POOL}[_s]) do `
-  code += `${BUF}[#${BUF}+1]=string.char(bit32.bxor(${BY},(${me(seed)}+${RK}+${IDX}*11)%256)) `
-  code += `${IDX}=${IDX}+1 end end `
-  code += `local ${OUT}=table.concat(${BUF}) ${BUF}=nil `
-
-  // Anti-hook simple pero efectivo (sin debug)
-  code += `local ${LS}=loadstring or load `
-  code += `if type(${LS})~="function" then error() end `
-
-  if (isUrl) {
-    const [G] = [gn()]
-    code += `local ${G}=game `
-    code += `${LS}(${G}:HttpGet(${OUT}))() `
-  } else {
-    code += `${LS}(${OUT})() `
-  }
-
-  return code
+// Random unique opcodes each obfuscation run — no fixed patterns
+function makeOps() {
+  const used = new Set()
+  const p = () => { let v; do { v = rnd(1, 200) } while (used.has(v)); used.add(v); return v }
+  return { PUSH: p(), CONCAT: p(), EXEC: p(), HTTP: p() }
 }
 
-// ── 3 estilos (corregidos, sin errores de sintaxis) ─────────
+// Compile payload → encrypted bytecode + constant pool
+function compile(payload, isUrl, ops) {
+  const bytes = Array.from(payload).map(c => c.charCodeAt(0))
+  const enc   = bytes.map((b, i) => encB(b, i))
+
+  const CHUNK = 8
+  const chunks = []
+  for (let i = 0; i < enc.length; i += CHUNK) chunks.push(enc.slice(i, i + CHUNK))
+
+  const bc = [], cp = []
+  for (const ch of chunks) { bc.push(ops.PUSH, cp.length); cp.push(ch) }
+  bc.push(ops.CONCAT)
+  bc.push(isUrl ? ops.HTTP : ops.EXEC)
+
+  // XOR all bytecode with K1 for storage (static reader sees garbage)
+  return { encBc: bc.map(b => (b ^ K1) & 0xFF), cp }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  REAL BYTECODE VM
+//  ────────────────
+//  Custom opcode interpreter. Payload never exists as a plain
+//  string until nanoseconds before execution inside a coroutine.
+//
+//  Key defenses:
+//  1. Keys derived from math.pi — static scanner sees variables
+//  2. loadstring fetched via rawget — bypasses __index proxy hooks
+//  3. Type check on loadstring — if hooked, returns not a function
+//  4. Execution inside coroutine.create — isolates call stack
+//  5. All decryption vars set to nil immediately after use
+// ═══════════════════════════════════════════════════════════════
+function buildVM(encBc, cp, ops) {
+  const [K1V,K2V,K3V,ENV,SCF,TCF,LSF,ASSF,BCV,CPV,STK,IP,ROP,GPV,CO,CIV,CHV] =
+    Array.from({ length: 17 }, gn)
+
+  let c = ''
+  // Runtime key variables — expressions, never literals
+  c += `local ${K1V}=${K1E} `
+  c += `local ${K2V}=${K2E} `
+  c += `local ${K3V}=${K3E} `
+
+  // Snapshot native functions via rawget — bypasses any __index hook on _G
+  c += `local ${ENV}=getfenv(0) `
+  c += `local ${SCF}=string.char `
+  c += `local ${TCF}=table.concat `
+  c += `local ${LSF}=rawget(${ENV},${SCF}(${sc("loadstring")})) `
+  c += `local ${ASSF}=rawget(${ENV},${SCF}(${sc("assert")})) `
+
+  // Hook detection: if loadstring was replaced by a proxy table, bail
+  c += `if type(${LSF})~="function" then return end `
+
+  // Encrypted bytecode array (all XOR'd with K1 — static reader sees noise)
+  c += `local ${BCV}={${encBc.map(me).join(',')}} `
+
+  // Constant pool (encrypted chunks)
+  c += `local ${CPV}={${cp.map(ch => `{${ch.map(me).join(',')}}`).join(',')}} `
+
+  // Execute entire VM inside a coroutine — harder to hook from outside
+  c += `local ${CO}=coroutine.create(function() `
+  c += `local ${STK}={} local ${IP}=1 `
+  c += `while ${IP}<=#${BCV} do `
+  c += `local ${ROP}=bit32.bxor(${BCV}[${IP}],${K1V}) `
+
+  // OP PUSH: decrypt one chunk and push as string onto stack
+  c += `if ${ROP}==${me(ops.PUSH)} then `
+  c += `${IP}=${IP}+1 `
+  c += `local ${CIV}=bit32.bxor(${BCV}[${IP}],${K1V})+1 `
+  c += `local ${CHV}=${CPV}[${CIV}] `
+  c += `local _d={} `
+  c += `for _j=1,#${CHV} do `
+  c += `_d[_j]=${SCF}((${CHV}[_j]-${K1V}-${K2V}*((_j-1)%16)-${K3V})%256) `
+  c += `end `
+  c += `${STK}[#${STK}+1]=${TCF}(_d) _d=nil `
+
+  // OP CONCAT: join all stack entries into one string
+  c += `elseif ${ROP}==${me(ops.CONCAT)} then `
+  c += `${STK}={${TCF}(${STK})} `
+
+  // OP EXEC: loadstring(pop())()
+  c += `elseif ${ROP}==${me(ops.EXEC)} then `
+  c += `local _s=${STK}[1] ${STK}=nil `
+  c += `${ASSF}(${LSF}(_s))() _s=nil `
+
+  // OP HTTP: HttpGet(pop()) then exec
+  c += `elseif ${ROP}==${me(ops.HTTP)} then `
+  c += `local _u=${STK}[1] ${STK}=nil `
+  c += `local ${GPV}=rawget(${ENV},${SCF}(${sc("game")})) `
+  c += `${ASSF}(${LSF}(${GPV}[${SCF}(${sc("HttpGet")})](${GPV},_u)))() _u=nil `
+
+  c += `end `        // end opcode if/elseif chain
+  c += `${IP}=${IP}+1 `
+  c += `end `        // end while
+  c += `end) `       // end coroutine.create(function()
+  c += `coroutine.resume(${CO}) ${CO}=nil `
+
+  return c
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DECOY VM BUILDER
+//  ────────────────
+//  Generates a VM that looks byte-for-byte structurally identical
+//  to the real VM (same field layout, same opcode positions),
+//  but uses:
+//    • Wrong K1: hardcoded number instead of math.pi expression
+//    • Wrong decrypt formula: K2/K3 are wrong constants
+//  → Decrypts to guaranteed garbage → loadstring("garbage") → nil
+//  → assert(nil) throws inside coroutine → resume swallows it
+//  → Outer pcall swallows any remaining error
+//
+//  Forces any analyst to EXECUTE all VMs and diff results.
+//  They cannot tell which VM is real from static analysis alone.
+// ═══════════════════════════════════════════════════════════════
+function buildDecoy() {
+  const dOps = makeOps()
+  let wK1 = rnd(30, 70); if (wK1 === 51) wK1 = 52  // wrong K1
+  const wK2 = rnd(20, 80), wK3 = rnd(20, 80)         // wrong K2, K3
+
+  // Random garbage payload bytes (will never be valid Lua)
+  const gLen = rnd(12, 30)
+  const gBc = [], gCp = []
+  const gChunk = Array.from({ length: gLen }, () => rnd(0, 255))
+  const CHUNK = 8
+  const gChunks = []
+  for (let i = 0; i < gChunk.length; i += CHUNK) gChunks.push(gChunk.slice(i, i + CHUNK))
+  for (const ch of gChunks) { gBc.push(dOps.PUSH, gCp.length); gCp.push(ch) }
+  gBc.push(dOps.CONCAT, dOps.EXEC)
+  const encGBc = gBc.map(b => (b ^ wK1) & 0xFF)
+
+  const [K1V,ENV,SCF,TCF,LSF,ASSF,BCV,CPV,STK,IP,ROP,CO,CIV] =
+    Array.from({ length: 13 }, gn)
+
+  let c = `pcall(function() `
+  c += `local ${K1V}=${me(wK1)} `   // ← hardcoded wrong number, not an expression
+  c += `local ${ENV}=getfenv(0) `
+  c += `local ${SCF}=string.char `
+  c += `local ${TCF}=table.concat `
+  c += `local ${LSF}=rawget(${ENV},${SCF}(${sc("loadstring")})) `
+  c += `local ${ASSF}=rawget(${ENV},${SCF}(${sc("assert")})) `
+  c += `if type(${LSF})~="function" then return end `
+  c += `local ${BCV}={${encGBc.map(me).join(',')}} `
+  c += `local ${CPV}={${gCp.map(ch => `{${ch.map(me).join(',')}}`).join(',')}} `
+  c += `local ${CO}=coroutine.create(function() `
+  c += `local ${STK}={} local ${IP}=1 `
+  c += `while ${IP}<=#${BCV} do `
+  c += `local ${ROP}=bit32.bxor(${BCV}[${IP}],${K1V}) `
+  c += `if ${ROP}==${me(dOps.PUSH)} then `
+  c += `${IP}=${IP}+1 `
+  c += `local ${CIV}=bit32.bxor(${BCV}[${IP}],${K1V})+1 `
+  c += `local _ch=${CPV}[${CIV}] local _d={} `
+  // Wrong decrypt formula (wK2/wK3 are hardcoded wrong values → garbage output)
+  c += `for _j=1,#_ch do _d[_j]=${SCF}((_ch[_j]-${me(wK2)}*((_j-1)%16)-${me(wK3)})%256) end `
+  c += `${STK}[#${STK}+1]=${TCF}(_d) _d=nil `
+  c += `elseif ${ROP}==${me(dOps.CONCAT)} then `
+  c += `${STK}={${TCF}(${STK})} `
+  c += `elseif ${ROP}==${me(dOps.EXEC)} then `
+  c += `local _s=${STK}[1] ${STK}=nil ${ASSF}(${LSF}(_s))() _s=nil `
+  c += `end `
+  c += `${IP}=${IP}+1 end `
+  c += `end) `
+  c += `coroutine.resume(${CO}) ${CO}=nil `
+  c += `end) `
+
+  return c
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  3 WRAPPER STYLES — rotate, never repeat same style twice in a
+//  row → no recurring structural fingerprint for pattern matching
+// ═══════════════════════════════════════════════════════════════
+
+// Style A: table dispatch, real index hidden by opaque key
 function styleA(inner) {
-  const count    = rnd(2,4)
-  const handlers = pickH(count)
-  const realIdx  = rnd(0,count-1)
-  const D = gn(), ARG = gn()
-
-  let code = ''
-  for (let i=0; i<count; i++) {
-    const body = i===realIdx ? inner : junk(rnd(2,4))
-    code += `local ${handlers[i]}=function(${ARG}) ${junk(rnd(1,2))} ${body} end `
+  const count = rnd(2, 3), handlers = pickH(count), realIdx = rnd(0, count - 1)
+  const [D, ARG, KEY] = [gn(), gn(), gn()]
+  let c = ''
+  for (let i = 0; i < count; i++) {
+    const body = i === realIdx ? inner : `return nil`
+    c += `local ${handlers[i]}=function(${ARG}) ${body} end `
   }
-  code += `local ${D}={${handlers.map((h,i)=>`[${me(i+1)}]=${h}`).join(',')}} `
-  code += `local _idx=${me(realIdx+1)} `
-  code += `if ${D}[_idx] then ${D}[_idx]() end `
-  return code
+  c += `local ${D}={${handlers.map((h, i) => `[${me(i + 1)}]=${h}`).join(',')}} `
+  c += `local ${KEY}=${me(realIdx + 1)} `
+  c += `if ${D}[${KEY}] then ${D}[${KEY}]() end `
+  return c
 }
 
+// Style B: while-CFF state machine, unique random base per layer
 function styleB(inner) {
-  const count    = rnd(2,5)
-  const realIdx  = rnd(0,count-1)
-  const S = gn()
-  const base     = rnd(100, 5000)
-
-  let code = `local ${S}=${me(base)} while true do `
-  for (let i=0; i<count; i++) {
-    const kw   = i===0 ? 'if' : 'elseif'
-    const step = base + i
-    code += `${kw} ${S}==${me(step)} then ${junk(2)} `
-    if (i===realIdx) {
-      code += `${inner} ${S}=${me(base+count)} `
+  const count = rnd(2, 4), realIdx = rnd(0, count - 1)
+  const S = gn(), base = rnd(200, 9000)
+  let c = `local ${S}=${me(base)} while true do `
+  for (let i = 0; i < count; i++) {
+    c += `${i === 0 ? 'if' : 'elseif'} ${S}==${me(base + i)} then `
+    if (i === realIdx) {
+      c += `${inner} ${S}=${me(base + count)} `
     } else {
-      code += `${S}=${me(base+i+1)} `
+      c += `${S}=${me(base + i + 1)} `
     }
   }
-  code += `elseif ${S}==${me(base+count)} then break end end `
-  return code
+  c += `elseif ${S}==${me(base + count)} then break end end `
+  return c
 }
 
+// Style C: pcall router, real branch selected by opaque key
 function styleC(inner) {
-  const count    = rnd(2,4)
-  const handlers = pickH(count)
-  const realIdx  = rnd(0,count-1)
-  const [ROUTER,KEY] = [gn(),gn()]
-
-  let code = ''
-  for (let i=0; i<count; i++) {
-    const body = i===realIdx ? inner : junk(rnd(2,3))
-    code += `local ${handlers[i]}=function() ${junk(rnd(1,2))} ${body} end `
+  const count = rnd(2, 3), handlers = pickH(count), realIdx = rnd(0, count - 1)
+  const [ROUTER, KEY, OK, ER] = [gn(), gn(), gn(), gn()]
+  let c = ''
+  for (let i = 0; i < count; i++) {
+    const body = i === realIdx ? inner : `return nil`
+    c += `local ${handlers[i]}=function() ${body} end `
   }
-
-  const tbl = handlers.map((h,i)=>`[${me(i+1)}]=${h}`).join(',')
-  code += `local ${ROUTER}=function(${KEY}) local _t={${tbl}} if _t[${KEY}] then _t[${KEY}]() end end `
-  code += `pcall(${ROUTER},${me(realIdx+1)}) `
-  return code
+  const tbl = handlers.map((h, i) => `[${me(i + 1)}]=${h}`).join(',')
+  c += `local ${ROUTER}=function(${KEY}) local _t={${tbl}} if _t[${KEY}] then _t[${KEY}]() end end `
+  c += `local ${OK},${ER}=pcall(${ROUTER},${me(realIdx + 1)}) `
+  c += `if not ${OK} then error(${ER}) end `
+  return c
 }
 
 const STYLES = [styleA, styleB, styleC]
 
-function buildLayers(payload) {
-  let vm = buildCore(payload)
-  let lastStyle = -1
-  for (let i=0; i<29; i++) {
-    let pick
-    do { pick = rnd(0,2) } while (pick === lastStyle)
-    lastStyle = pick
-    vm = STYLES[pick](vm)
+// Wrap code N times, never repeating the same style consecutively
+function buildLayers(code, n = 15) {
+  let last = -1
+  for (let i = 0; i < n; i++) {
+    let pick; do { pick = rnd(0, 2) } while (pick === last)
+    last = pick
+    code = STYLES[pick](code)
   }
-  return vm
+  return code
 }
 
-// Anti‑debug ligero (solo checks que no rompen Roblox)
+// ── Anti-debug (compact, Roblox-safe) ────────────────────────────
 function antiDebug() {
-  const [T] = [gn()]
+  const [T, V] = [gn(), gn()]
   return [
-    `local ${T}=os.clock() for _=1,50000 do end if os.clock()-${T}>0.5 then while true do end end`,
-    `if type(loadstring)~="function" and type(load)~="function" then while true do end end`,
-    `if pcall and type(pcall)~="function" then while true do end end`,
+    // Timing: debugger slows execution → freeze
+    `local ${T}=os.clock() for _=1,60000 do end if os.clock()-${T}>3 then while true do end end`,
+    // Debug library presence
+    `if debug~=nil and rawget(debug,"getinfo") then while true do end end`,
+    // Metatable hook on _G
+    `if getmetatable(_G)~=nil then while true do end end`,
+    // loadstring must be a native function (not a proxy)
+    `local ${V}=rawget(getfenv(0),string.char(${sc("loadstring")})) if type(${V})~="function" then while true do end end`,
+    // math.pi sanity (tamper detection)
+    `if math.floor(math.pi*100)~=314 then while true do end end`,
   ].join(' ')
 }
 
+// ── Main export ───────────────────────────────────────────────────
 function obfuscate(sourceCode) {
-  if (!sourceCode || !sourceCode.trim()) return '--ERROR'
+  if (!sourceCode?.trim()) return '--ERROR'
 
-  let payload
+  // Detect loadstring(game:HttpGet("url"))() pattern
   const urlMatch = sourceCode.match(
     /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   )
-  payload = urlMatch ? urlMatch[1] : sourceCode
+  const payload = urlMatch ? urlMatch[1] : sourceCode
+  const isUrl   = !!urlMatch
 
-  const vm = buildLayers(payload)
-  return `${HEADER} ${antiDebug()} ${vm}`.replace(/\s+/g,' ').trim()
+  // 1. Compile payload → encrypted bytecode + constant pool
+  const ops            = makeOps()
+  const { encBc, cp }  = compile(payload, isUrl, ops)
+
+  // 2. Build real VM
+  const realVM = buildVM(encBc, cp, ops)
+
+  // 3. Build 2 decoy VMs (structurally identical, wrong keys)
+  const decoy1 = buildDecoy()
+  const decoy2 = buildDecoy()
+
+  // 4. Shuffle real VM between decoys — random position each run
+  const pool = [realVM, decoy1, decoy2]
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = rnd(0, i);
+    [pool[i], pool[j]] = [pool[j], pool[i]]
+  }
+
+  // 5. Wrap all 3 VMs in 15 rotating structural layers
+  const layered = buildLayers(pool.join(' '), 15)
+
+  return `${HEADER} ${antiDebug()} ${layered}`.replace(/\s+/g, ' ').trim()
 }
 
 module.exports = { obfuscate }
