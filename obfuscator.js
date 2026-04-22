@@ -1,7 +1,7 @@
 /**
  * VVMER OBFUSCATOR - DUAL MODE (FUSIONADO)
  * Normal: 18x VM + Mapeos + Protecciones estándar
- * Diabolical: ULTRA MODE (200 VM frágiles, 33% más matemáticas, 20 anti-tamper, 246KB)
+ * Diabolical: ULTRA MODE (150 VM frágiles, 40% menos matemáticas, 20 anti-tamper, 246KB)
  */
 
 const HEADER = `--[[ this code it's protected by vmmer obfoscator ]]`;
@@ -41,22 +41,22 @@ function applyCFF(blocks) {
   return lua;
 }
 
-// ==================== VERSIONES PARA MODO DIABOLICAL (ULTRA) ====================
+// ==================== VERSIONES PARA MODO DIABOLICAL (ULTRA REDUCIDO) ====================
 
+// Reducido en un 40% respecto a la versión ultra original
 function heavyMathUltra(n) {
   if (Math.random() < 0.2) return n.toString();
   let a = Math.floor(Math.random() * 5000) + 1000;
   let b = Math.floor(Math.random() * 100) + 2;
   let c = Math.floor(Math.random() * 800) + 10;
-  let d = Math.floor(Math.random() * 20) + 2;
-  let e = Math.floor(Math.random() * 50) + 5;
-  let f = Math.floor(Math.random() * 30) + 3;
-  return `(((((((${n}+${a})*${b})/${b})-${a})+(((${c}*${d})/${d})-${c}))*${e}/${e})+(((${f}+${Math.floor(Math.random()*100)})*${Math.floor(Math.random()*20)})/${Math.floor(Math.random()*20)+1})-${f})`;
+  // 40% menos operaciones: eliminamos d,e,f y sus combinaciones
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${c})/${c})-${c})`;
 }
 
 function mbaUltra() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8, c = Math.floor(Math.random() * 30) + 5;
-  return `(((${n}*${a}-${a})/(${b}+1)+${n})*${c}/${c})`;
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  // Simplificado (40% menos): eliminamos multiplicación y división final
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
 function generateJunkUltra(lines = 100) {
@@ -199,8 +199,9 @@ function getUltraProtections() {
   return antiDebuggers + codeVaultGuards;
 }
 
+// PROFUNDIDAD REDUCIDA DE 200 A 150 (50 VM menos)
 function buildFragileVM(innerCode, depth = 0) {
-  if (depth >= 200) return innerCode;
+  if (depth >= 150) return innerCode;  // <-- Cambio aquí
 
   const vmName = generateIlName();
   const handlerCount = Math.floor(Math.random() * 5) + 3;
@@ -264,7 +265,7 @@ function obfuscateDiabolical(sourceCode) {
   return finalCode;
 }
 
-// ==================== VERSIONES PARA MODO NORMAL ====================
+// ==================== VERSIONES PARA MODO NORMAL (SIN CAMBIOS) ====================
 
 function heavyMathNormal(n) {
   if (Math.random() < 0.3) return n.toString();
