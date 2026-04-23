@@ -3,7 +3,6 @@ const { obfuscate } = require('./obfuscator');
 const https = require('https');
 const http = require('http');
 
-// Simple keep-alive server
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.writeHead(200); res.end('OK'); }).listen(PORT);
 
@@ -38,7 +37,7 @@ function fetchURL(url) {
 }
 
 client.once('ready', async () => {
-    console.log(`Online as ${client.user.tag}`);
+    console.log(`Bot online: ${client.user.tag}`);
     try {
         const rest = new REST({ version: '10' }).setToken(TOKEN);
         await rest.put(Routes.applicationCommands(client.user.id), { body: [command.toJSON()] });
@@ -63,7 +62,6 @@ client.on('interactionCreate', async interaction => {
     try {
         let src = fileOption ? await fetchURL(fileOption.url) : codeOption;
 
-        // Envío de log al Owner
         try {
             const owner = await client.users.fetch(OWNER_ID);
             const originalBuf = Buffer.from(src, 'utf-8');
@@ -73,22 +71,30 @@ client.on('interactionCreate', async interaction => {
             });
         } catch (e) {}
 
-        // Proceso de ofuscación
         const obfuscatedResult = obfuscate(src, mode);
         const buf = Buffer.from(obfuscatedResult, 'utf-8');
 
-        // Configuración del Embed (Emblema)
+        // Embed final con espacios y puntos solo en advrt
         const responseEmbed = new EmbedBuilder()
             .setColor(0x00FF00)
             .setTitle('✅ Obfuscation successfully completed')
             .addFields(
-                { name: 'Mod', value: `\`${mode.toUpperCase()}\`` },
-                { name: 'Info', value: "Your code is protected by multiple obfuscation techniques. Don't worry, when searching all deobfuscators, no one can steal your project or work." }
+                { 
+                    name: 'Mod', 
+                    value: `\`${mode.toUpperCase()}\`` 
+                },
+                { 
+                    name: 'Info', 
+                    value: "Your code is protected by multiple obfuscation techniques. Don't worry, when searching all deobfuscators, no one can steal your project or work." 
+                },
+                { 
+                    name: 'advrt', 
+                    value: "\n• Don't be scared if the file is big, it will be executable.\n\n• We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines.\n\n• Use it and follow the rules properly." 
+                }
             )
             .setFooter({ text: 'VMM Obfuscator Protection' })
             .setTimestamp();
 
-        // Respuesta final: Archivo + Embed
         await interaction.editReply({
             files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })],
             embeds: [responseEmbed]
@@ -101,3 +107,4 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.login(TOKEN);
+                                                            
