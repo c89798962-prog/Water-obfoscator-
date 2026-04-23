@@ -1,10 +1,10 @@
 /**
  * VVMER OBFUSCATOR - DUAL MODE (FUSIONADO)
  * Normal: 18x VM + Mapeos + Protecciones estándar
- * Diabolical: ULTRA MODE (150 VM frágiles, 40% menos matemáticas, 20 anti-tamper, 246KB)
+ * Diabolical: ULTRA MODE (150 VM frágiles, 35% menos matemáticas, 20 anti-tamper, 246KB)
  */
 
-const HEADER = `--[[ this code it's protected by vmmer obfoscator ]]`;
+const HEADER = `--[[ this code it's protected by vmmer obfoscator | https://discord.gg/AAVKHtbxS ]]`;
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"];
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"];
@@ -41,22 +41,22 @@ function applyCFF(blocks) {
   return lua;
 }
 
-// ==================== VERSIONES PARA MODO DIABOLICAL (ULTRA REDUCIDO) ====================
+// ==================== VERSIONES PARA MODO DIABOLICAL (REDUCIDO 35%) ====================
 
-// Reducido en un 40% respecto a la versión ultra original
 function heavyMathUltra(n) {
   if (Math.random() < 0.2) return n.toString();
   let a = Math.floor(Math.random() * 5000) + 1000;
   let b = Math.floor(Math.random() * 100) + 2;
   let c = Math.floor(Math.random() * 800) + 10;
-  // 40% menos operaciones: eliminamos d,e,f y sus combinaciones
-  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${c})/${c})-${c})`;
+  // Simplificado: solo cancelación a + ruido c (menos operaciones)
+  return `(((${n}+${a})*${b})/${b})-${a}+${c}-${c}`;
 }
 
 function mbaUltra() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
-  // Simplificado (40% menos): eliminamos multiplicación y división final
-  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+  let n = Math.random() > 0.5 ? 1 : 2;
+  let a = Math.floor(Math.random() * 70) + 15;
+  // Simplificado: (n + a) - a = n
+  return `(${n}+${a})-${a}`;
 }
 
 function generateJunkUltra(lines = 100) {
@@ -201,7 +201,7 @@ function getUltraProtections() {
 
 // PROFUNDIDAD REDUCIDA DE 200 A 150 (50 VM menos)
 function buildFragileVM(innerCode, depth = 0) {
-  if (depth >= 45) return innerCode;  // <-- Cambio aquí
+  if (depth >= 45) return innerCode;
 
   const vmName = generateIlName();
   const handlerCount = Math.floor(Math.random() * 5) + 3;
@@ -265,20 +265,21 @@ function obfuscateDiabolical(sourceCode) {
   return finalCode;
 }
 
-// ==================== VERSIONES PARA MODO NORMAL (SIN CAMBIOS) ====================
+// ==================== VERSIONES PARA MODO NORMAL (REDUCIDO 35%) ====================
 
 function heavyMathNormal(n) {
   if (Math.random() < 0.3) return n.toString();
   let a = Math.floor(Math.random() * 5000) + 1000;
   let b = Math.floor(Math.random() * 100) + 2;
   let c = Math.floor(Math.random() * 800) + 10;
-  let d = Math.floor(Math.random() * 20) + 2;
-  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`;
+  // Simplificado: cancelación a + ruido c
+  return `(((${n}+${a})*${b})/${b})-${a}+${c}-${c}`;
 }
 
 function mbaNormal() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
-  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+  let n = Math.random() > 0.5 ? 1 : 2;
+  let a = Math.floor(Math.random() * 70) + 15;
+  return `(${n}+${a})-${a}`;
 }
 
 function generateJunkNormal(lines = 100) {
