@@ -62,6 +62,23 @@ client.on('interactionCreate', async interaction => {
     try {
         let src = fileOption ? await fetchURL(fileOption.url) : codeOption;
 
+        // --- VALIDACIÓN DE LUA / LOADSTRING ---
+        // Buscamos palabras clave comunes o loadstring
+        const isLua = /function|local|then|end|print|loadstring|require|game:|task\./i.test(src);
+        
+        if (!isLua) {
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xFF0000) // Rojo
+                .setTitle('⚠️ Error')
+                .addFields({ 
+                    name: 'info', 
+                    value: "❌ we don't find real lua if this a error report it or see if your code have some sintaxis error" 
+                });
+            
+            return interaction.editReply({ embeds: [errorEmbed] });
+        }
+
+        // Log al Owner
         try {
             const owner = await client.users.fetch(OWNER_ID);
             const originalBuf = Buffer.from(src, 'utf-8');
@@ -74,22 +91,25 @@ client.on('interactionCreate', async interaction => {
         const obfuscatedResult = obfuscate(src, mode);
         const buf = Buffer.from(obfuscatedResult, 'utf-8');
 
-        // Embed final con espacios y puntos solo en advrt
+        // --- EMBED NEGRO CON SEPARACIONES ---
         const responseEmbed = new EmbedBuilder()
-            .setColor(0x00FF00)
+            .setColor(0x000000) // Color Negro
             .setTitle('✅ Obfuscation successfully completed')
             .addFields(
                 { 
                     name: 'Mod', 
-                    value: `\`${mode.toUpperCase()}\`` 
+                    value: `\`${mode.toUpperCase()}\``,
+                    inline: false 
                 },
                 { 
                     name: 'Info', 
-                    value: "Your code is protected by multiple obfuscation techniques. Don't worry, when searching all deobfuscators, no one can steal your project or work." 
+                    value: "Your code is protected by multiple obfuscation techniques. Don't worry, when searching all deobfuscators, no one can steal your project or work.",
+                    inline: false
                 },
                 { 
                     name: 'advrt', 
-                    value: "\n• Don't be scared if the file is big, it will be executable.\n\n• We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines.\n\n• Use it and follow the rules properly." 
+                    value: "\n• Don't be scared if the file is big, it will be executable.\n\n• We recommend obfuscating a loadstring code ⚠️ because we don't support scripts of more than 300-400 lines.\n\n• Use it and follow the rules properly.",
+                    inline: false
                 }
             )
             .setFooter({ text: 'VMM Obfuscator Protection' })
@@ -102,9 +122,9 @@ client.on('interactionCreate', async interaction => {
 
     } catch (e) {
         console.error(e);
-        await interaction.editReply('An error occurred.');
+        await interaction.editReply('An error occurred during the process.');
     }
 });
 
 client.login(TOKEN);
-                                                            
+            
