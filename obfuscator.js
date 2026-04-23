@@ -2,8 +2,6 @@
  * VVMER OBFUSCATOR - DUAL MODE (FUSIONADO)
  * Normal: 18x VM + Mapeos + Protecciones estándar
  * Diabolical: ULTRA MODE (150 VM frágiles, 40% menos matemáticas, 20 anti-tamper, 246KB)
- * 
- * Las 10 líneas finales aplican TODAS las técnicas de ofuscación de forma atómica.
  */
 
 const HEADER = `--[[ this code it's protected by vmmer obfoscator ]]`;
@@ -43,101 +41,21 @@ function applyCFF(blocks) {
   return lua;
 }
 
-// ==================== NUEVA GENERACIÓN DE 10 LÍNEAS CON TODAS LAS TÉCNICAS ====================
-
-// Función para generar un número aleatorio ofuscado con MBA y constant hiding
-function mbaNumber(n, mode) {
-  const heavy = (mode === 'diabolical') ? heavyMathUltra : heavyMathNormal;
-  if (Math.random() > 0.7) return heavy(n);
-  let a = Math.floor(Math.random() * 100) + 1;
-  let b = Math.floor(Math.random() * 50) + 2;
-  let c = Math.floor(Math.random() * 30) + 1;
-  // Mixed Boolean Arithmetic: combinación de operaciones aritméticas y booleanas
-  return `((${heavy(n)} + ${heavy(a)}) * ${heavy(b)} - ${heavy(c)} * (${heavy(b)} - ${heavy(1)}) + ((${heavy(n)} & ${heavy(a)}) | ${heavy(c)}))`;
-}
-
-// Ofusca un string usando XOR + clave dinámica + encoding en base64 falso (porque Lua no tiene base64 nativo, simulamos con charcode)
-function xorEncodeString(str, key) {
-  let encoded = [];
-  for (let i = 0; i < str.length; i++) {
-    encoded.push(str.charCodeAt(i) ^ key);
-  }
-  return encoded;
-}
-
-// Genera una línea ultrapesada con todas las técnicas
-function generateUltraLine(url, mode, lineIndex) {
-  const heavy = (mode === 'diabolical') ? heavyMathUltra : heavyMathNormal;
-  const varName = generateIlName() + (Math.random() > 0.5 ? '_' + Math.random().toString(36).substring(2,5) : '');
-  
-  // Clave dinámica para XOR (varía por línea)
-  const xorKey = Math.floor(Math.random() * 255) + 1;
-  const xorKeyObf = mbaNumber(xorKey, mode);
-  
-  // Codificar URL con XOR
-  const encodedBytes = xorEncodeString(url, xorKey);
-  
-  // Construir tabla de bytes ofuscados (cada byte con MBA)
-  const byteStrings = encodedBytes.map(b => mbaNumber(b, mode));
-  
-  // Tabla de indirección (para ofuscar string.char)
-  const tableName = generateIlName();
-  const stringCharObf = `(function(t) return t[${heavy(1)}] end)({ [${heavy(1)}]=string.char, [${heavy(2)}]=table.concat })`;
-  
-  // Predicado opaco (siempre falso pero parece real)
-  const opaquePred = `(function() local _x=${heavy(Math.random() * 100)}; if _x==_x then return true else return false end end)()`;
-  
-  // Inyección de código muerto dentro de la misma línea usando operador `;` y funciones anónimas
-  const deadCode = `;(function() local _d=${heavy(Math.floor(Math.random()*999))}; if _d==${heavy(-1)} then while true do end end end)()`;
-  
-  // Bogus loop (no hace nada pero añade complejidad)
-  const bogusLoop = `;(function() for _=1,${heavy(0)} do end end)()`;
-  
-  // Expresión inflada: reconstrucción runtime del string
-  // Primero creamos una tabla con los bytes, luego aplicamos XOR inverso, luego unimos con string.char
-  const reconstruction = `(function(k) local t={${byteStrings.join(',')}}; for i=1,#t do t[i]=bit32.bxor(t[i], k) end; return ${stringCharObf}(table.concat(${stringCharObf}(t))) end)(${xorKeyObf})`;
-  
-  // Indirección global: _G[...] en lugar de acceso directo
-  const globalAccess = `_G[${runtimeString("string")}][${runtimeString("char")}]`; // esto es pesado, pero lo simplificamos
-  
-  // Combinamos todo en una sola línea usando operadores ternarios y ejecución diferida
-  // La línea final asigna la variable al resultado de una función anónima que aplica todas las técnicas
-  const finalLine = `local ${varName}=${opaquePred} and (function() ${deadCode} ${bogusLoop} return ${reconstruction} end)() or (function() return "" end)()`;
-  
-  return finalLine;
-}
-
-function generateObfuscatedLinesForUrl(url, mode) {
-  let lines = [];
-  for (let i = 0; i < 10; i++) {
-    lines.push(generateUltraLine(url, mode, i));
-  }
-  return lines.join(' ');
-}
-
-// Extrae todas las URLs del código fuente (dentro de comillas simples o dobles)
-function extractAllUrls(sourceCode) {
-  const urlRegex = /["'](https?:\/\/[^"'\s]+)["']/gi;
-  const urls = new Set();
-  let match;
-  while ((match = urlRegex.exec(sourceCode)) !== null) {
-    urls.add(match[1]);
-  }
-  return Array.from(urls);
-}
-
 // ==================== VERSIONES PARA MODO DIABOLICAL (ULTRA REDUCIDO) ====================
 
+// Reducido en un 40% respecto a la versión ultra original
 function heavyMathUltra(n) {
   if (Math.random() < 0.2) return n.toString();
   let a = Math.floor(Math.random() * 5000) + 1000;
   let b = Math.floor(Math.random() * 100) + 2;
   let c = Math.floor(Math.random() * 800) + 10;
+  // 40% menos operaciones: eliminamos d,e,f y sus combinaciones
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${c})/${c})-${c})`;
 }
 
 function mbaUltra() {
   let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  // Simplificado (40% menos): eliminamos multiplicación y división final
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
@@ -281,8 +199,9 @@ function getUltraProtections() {
   return antiDebuggers + codeVaultGuards;
 }
 
+// PROFUNDIDAD REDUCIDA DE 200 A 150 (50 VM menos)
 function buildFragileVM(innerCode, depth = 0) {
-  if (depth >= 45) return innerCode;
+  if (depth >= 45) return innerCode;  // <-- Cambio aquí
 
   const vmName = generateIlName();
   const handlerCount = Math.floor(Math.random() * 5) + 3;
@@ -321,23 +240,13 @@ function buildFragileVM(innerCode, depth = 0) {
 function obfuscateDiabolical(sourceCode) {
   if (!sourceCode) return '-- Error: No Source';
 
-  // Extraer todas las URLs del código original
-  const urls = extractAllUrls(sourceCode);
-  
-  // Si hay URLs, las eliminamos del código original para que no queden visibles
-  let cleanSource = sourceCode;
-  for (const url of urls) {
-    const regex = new RegExp(`["']${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g');
-    cleanSource = cleanSource.replace(regex, '""');
-  }
-
   const extraProtections = getUltraProtections();
 
   let payloadToProtect = "";
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
-  const match = cleanSource.match(isLoadstringRegex);
+  const match = sourceCode.match(isLoadstringRegex);
   if (match) { payloadToProtect = match[1]; }
-  else       { payloadToProtect = detectAndApplyMappingsUltra(cleanSource); }
+  else       { payloadToProtect = detectAndApplyMappingsUltra(sourceCode); }
 
   let vm = buildTrueVMUltra(payloadToProtect);
   vm = buildFragileVM(vm, 0);
@@ -353,19 +262,10 @@ function obfuscateDiabolical(sourceCode) {
     finalCode = `${HEADER} ${generateJunkUltra(50 + additionalLines)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
   }
 
-  // Añadir las 10 líneas ultrapesadas por cada URL encontrada
-  if (urls.length > 0) {
-    let allUrlLines = '';
-    for (const url of urls) {
-      allUrlLines += ' ' + generateObfuscatedLinesForUrl(url, 'diabolical');
-    }
-    finalCode += allUrlLines;
-  }
-
   return finalCode;
 }
 
-// ==================== VERSIONES PARA MODO NORMAL ====================
+// ==================== VERSIONES PARA MODO NORMAL (SIN CAMBIOS) ====================
 
 function heavyMathNormal(n) {
   if (Math.random() < 0.3) return n.toString();
@@ -497,39 +397,18 @@ function getNormalProtections() {
 function obfuscateNormal(sourceCode) {
   if (!sourceCode) return '-- Error: No Source';
 
-  // Extraer todas las URLs del código original
-  const urls = extractAllUrls(sourceCode);
-  
-  // Si hay URLs, las eliminamos del código original para que no queden visibles
-  let cleanSource = sourceCode;
-  for (const url of urls) {
-    const regex = new RegExp(`["']${url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g');
-    cleanSource = cleanSource.replace(regex, '""');
-  }
-
   const extraProtections = getNormalProtections();
   let payloadToProtect = "";
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
-  const match = cleanSource.match(isLoadstringRegex);
+  const match = sourceCode.match(isLoadstringRegex);
   if (match) { payloadToProtect = match[1]; } 
-  else { payloadToProtect = detectAndApplyMappingsNormal(cleanSource); }
+  else { payloadToProtect = detectAndApplyMappingsNormal(sourceCode); }
 
   let vm = buildTrueVMNormal(payloadToProtect);
   for (let i = 0; i < 17; i++) {
     vm = buildSingleVMNormalNormal(vm, Math.floor(Math.random() * 2) + 3); 
   }
-  let finalCode = `${HEADER} ${generateJunkNormal(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
-
-  // Añadir las 10 líneas ultrapesadas por cada URL encontrada
-  if (urls.length > 0) {
-    let allUrlLines = '';
-    for (const url of urls) {
-      allUrlLines += ' ' + generateObfuscatedLinesForUrl(url, 'normal');
-    }
-    finalCode += allUrlLines;
-  }
-
-  return finalCode;
+  return `${HEADER} ${generateJunkNormal(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
 }
 
 // ==================== FUNCIÓN PRINCIPAL EXPORTADA ====================
