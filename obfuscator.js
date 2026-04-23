@@ -1,10 +1,10 @@
 /**
  * VVMER OBFUSCATOR - DUAL MODE (FUSIONADO)
  * Normal: 18x VM + Mapeos + Protecciones estándar
- * Diabolical: ULTRA MODE (150 VM frágiles, 20% menos matemáticas, 20 anti-tamper, 246KB)
+ * Diabolical: ULTRA MODE (150 VM frágiles, 35% menos matemáticas, 20 anti-tamper, 246KB)
  */
 
-const HEADER = `--[[ this code it's protected by vmmer obfoscator  | https://discord.gg/AAVKHtbxS  ]]`;
+const HEADER = `--[[ this code it's protected by vmmer obfoscator | https://discord.gg/AAVKHtbxS ]]`;
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"];
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"];
@@ -41,19 +41,21 @@ function applyCFF(blocks) {
   return lua;
 }
 
-// ==================== VERSIONES PARA MODO DIABOLICAL (REDUCIDO 20%) ====================
+// ==================== VERSIONES PARA MODO DIABOLICAL (REDUCIDO 35%) ====================
 
 function heavyMathUltra(n) {
   if (Math.random() < 0.2) return n.toString();
   let a = Math.floor(Math.random() * 5000) + 1000;
   let b = Math.floor(Math.random() * 100) + 2;
-  // Reducción del 20%: eliminado el ruido +c-c, quedan 4 operaciones (antes 6)
-  return `(((${n}+${a})*${b})/${b})-${a}`;
+  let c = Math.floor(Math.random() * 800) + 10;
+  // Simplificado: solo cancelación a + ruido c (menos operaciones)
+  return `(((${n}+${a})*${b})/${b})-${a}+${c}-${c}`;
 }
 
 function mbaUltra() {
   let n = Math.random() > 0.5 ? 1 : 2;
   let a = Math.floor(Math.random() * 70) + 15;
+  // Simplificado: (n + a) - a = n
   return `(${n}+${a})-${a}`;
 }
 
@@ -71,9 +73,7 @@ function generateJunkUltra(lines = 100) {
       const vt = generateIlName();
       j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
     } else {
-      // Añadimos corazones aleatorios en strings basura
-      const heart = Math.random() > 0.5 ? "❤️" : "💔";
-      j += `local ${generateIlName()}="${heart}" `;
+      j += `if type(math.pi)=="string" then local _=1 end `;
     }
   }
   return j;
@@ -265,14 +265,15 @@ function obfuscateDiabolical(sourceCode) {
   return finalCode;
 }
 
-// ==================== VERSIONES PARA MODO NORMAL (REDUCIDO 20%) ====================
+// ==================== VERSIONES PARA MODO NORMAL (REDUCIDO 35%) ====================
 
 function heavyMathNormal(n) {
   if (Math.random() < 0.3) return n.toString();
   let a = Math.floor(Math.random() * 5000) + 1000;
   let b = Math.floor(Math.random() * 100) + 2;
-  // Reducción del 20%: eliminado el ruido +c-c
-  return `(((${n}+${a})*${b})/${b})-${a}`;
+  let c = Math.floor(Math.random() * 800) + 10;
+  // Simplificado: cancelación a + ruido c
+  return `(((${n}+${a})*${b})/${b})-${a}+${c}-${c}`;
 }
 
 function mbaNormal() {
@@ -295,8 +296,7 @@ function generateJunkNormal(lines = 100) {
       const vt = generateIlName();
       j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
     } else {
-      const heart = Math.random() > 0.5 ? "❤️" : "💔";
-      j += `local ${generateIlName()}="${heart}" `;
+      j += `if type(math.pi)=="string" then local _=1 end `;
     }
   }
   return j;
