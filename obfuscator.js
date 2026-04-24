@@ -1,454 +1,419 @@
-// ================================================================
-// VMMER — Obfuscador Lua completo
-// Técnicas: todas las de MoonVeil implementadas desde cero
-// ================================================================
 
-const IL_POOL = ["IIlIlI","lvlvlv","vvIIvv","IlIlIl","llIIll","vIvIvI","IvIvIv","llvvll","vvllvv","IIvvII"];
-const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD","fG","hJ","kN"];
+const HEADER = `--[[ this code it's protected by vmmer obfoscator ]]`;
 
-function uid() {
-  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 9999999);
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"];
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"];
+
+// ==================== FUNCIONES AUXILIARES COMUNES ====================
+
+function generateIlName() {
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 999999);
 }
 
-function pickHandler() {
-  return HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)] + Math.floor(Math.random() * 999);
-}
-
-// ================================================================
-// 1. MANGLE NUMBERS — reemplaza literales numéricos con expresiones
-// ================================================================
-function mangleNumbers(code) {
-  // Evitar reemplazar dentro de strings
-  return code.replace(/(?<!["\w])(\d+)(?![\w"])/g, (match, n) => {
-    const num = parseInt(n);
-    if (num === 0) return '(1-1)';
-    if (num === 1) return '(2-1)';
-    const a = Math.floor(Math.random() * 500) + 100;
-    return `(${num + a}-${a})`;
-  });
-}
-
-// ================================================================
-// 2. MANGLE STRINGS — cifra string literals con string.char
-// ================================================================
-function mangleStrings(code) {
-  // Reemplaza "texto" y 'texto' con string.char(...)
-  return code.replace(/"([^"\\]*(\\.[^"\\]*)*)"|'([^'\\]*(\\.[^'\\]*)*)'/g, (match) => {
-    const inner = match.slice(1, -1)
-      .replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-      .replace(/\\"/g, '"').replace(/\\'/g, "'");
-    const bytes = [];
-    for (let i = 0; i < inner.length; i++) {
-      bytes.push(inner.charCodeAt(i));
-    }
-    if (bytes.length === 0) return '("")';
-    return `string.char(${bytes.join(',')})`;
-  });
-}
-
-// ================================================================
-// 3. MANGLE NAMED INDEXES — obj.field → obj["field"]
-// ================================================================
-function mangleNamedIndexes(code) {
-  // Reemplaza accesos a campos: foo.bar → foo["bar"]
-  // Cuidado: no reemplazar en comentarios ni strings
-  return code.replace(/([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)/g, (match, obj, field) => {
-    // No tocar require, module, etc. en ciertas posiciones
-    const SKIP = ['string', 'table', 'math', 'io', 'os', 'bit32', 'utf8', 'debug'];
-    if (SKIP.includes(obj)) return match; // conservar math.floor, etc.
-    return `${obj}["${field}"]`;
-  });
-}
-
-// ================================================================
-// 4. MANGLE SELF-CALLS — obj:method() → obj["method"](obj)
-// ================================================================
-function mangleSelfCalls(code) {
-  return code.replace(/([a-zA-Z_][a-zA-Z0-9_]*):([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g, (match, obj, method) => {
-    return `${obj}["${method}"](${obj},`;
-  });
-}
-
-// ================================================================
-// 5. MANGLE GLOBALS — reemplaza globals con getfenv()["name"]
-// ================================================================
-function mangleGlobals(code) {
-  const GLOBALS = ['print','warn','error','pairs','ipairs','next','select',
-    'tonumber','tostring','type','rawget','rawset','rawequal','rawlen',
-    'setmetatable','getmetatable','pcall','xpcall','coroutine',
-    'loadstring','load','dofile','loadfile','require',
-    'game','workspace','script','Instance','Enum','wait',
-    'task','tick','time','delay','spawn'];
-
-  let result = code;
-  for (const g of GLOBALS) {
-    const regex = new RegExp(`\\b${g}\\b(?!\\s*=)(?![\\w])`, 'g');
-    const envVar = uid();
-    const occurrences = (result.match(regex) || []).length;
-    if (occurrences > 0) {
-      // Solo si aparece, crear variable al inicio del bloque donde se use
-      result = result.replace(regex, `(getfenv()["${g}"])`);
-    }
+function pickHandlers(count) {
+  const used = new Set();
+  const result = [];
+  while (result.length < count) {
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)];
+    const name = base + Math.floor(Math.random() * 99);
+    if (!used.has(name)) { used.add(name); result.push(name); }
   }
   return result;
 }
 
-// ================================================================
-// 6. LIFT CONSTANTS — extrae strings/números a vars locales arriba
-// ================================================================
-function liftConstants(code, percentage = 25) {
-  const lifted = [];
-  const threshold = percentage / 100;
-
-  // Levantar strings frecuentes
-  const stringMatches = {};
-  const strRegex = /"([^"\\]*(\\.[^"\\]*)*)"|'([^'\\]*(\\.[^'\\]*)*)'/g;
-  let m;
-  while ((m = strRegex.exec(code)) !== null) {
-    const key = m[0];
-    stringMatches[key] = (stringMatches[key] || 0) + 1;
-  }
-
-  let header = '';
-  const replacements = {};
-  for (const [str, count] of Object.entries(stringMatches)) {
-    if (count >= 2 && Math.random() < threshold + 0.3) {
-      const varName = uid();
-      header += `local ${varName}=${str} `;
-      replacements[str] = varName;
-    }
-  }
-
-  let result = code;
-  for (const [orig, varName] of Object.entries(replacements)) {
-    result = result.split(orig).join(varName);
-  }
-
-  return header + result;
+function runtimeString(str) {
+  return `string.char(${str.split('').map(c => heavyMathUltra(c.charCodeAt(0))).join(',')})`;
 }
 
-// ================================================================
-// 7. MANGLE STATEMENTS — renombra variables locales
-// ================================================================
-function mangleStatements(code) {
-  // Encuentra declaraciones local y las renombra
-  const varMap = {};
-  
-  // Primero, recolectar todas las variables locales
-  const localRegex = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_,\s]*?)(?=\s*[=\n])/g;
-  let match;
-  while ((match = localRegex.exec(code)) !== null) {
-    const vars = match[1].split(',').map(v => v.trim());
-    for (const v of vars) {
-      if (v && !varMap[v] && v !== '_') {
-        varMap[v] = uid();
-      }
-    }
-  }
-
-  // Reemplazar en el código (cuidado con no tocar strings)
-  let result = code;
-  for (const [orig, mangled] of Object.entries(varMap)) {
-    // Solo reemplazar palabras completas que no estén entre comillas
-    const regex = new RegExp(`\\b${orig}\\b`, 'g');
-    result = result.replace(regex, mangled);
-  }
-
-  return result;
-}
-
-// ================================================================
-// 8. HOIST LOCALS — mueve locals al inicio de cada función
-// ================================================================
-function hoistLocals(code) {
-  // Mueve todas las declaraciones local al principio del script
-  const localDecls = [];
-  const localRegex = /^(\s*)(local\s+[a-zA-Z_][a-zA-Z0-9_]*\s*(?:,\s*[a-zA-Z_][a-zA-Z0-9_]*)*)\s*$/gm;
-  
-  let result = code;
-  const hoisted = [];
-  
-  result = result.replace(/\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(?=\n|;|$)/gm, (match, name) => {
-    hoisted.push(`local ${name}`);
-    return `${name}`; // quitar el local del lugar original
-  });
-
-  if (hoisted.length > 0) {
-    result = hoisted.join(' ') + ' ' + result;
-  }
-
-  return result;
-}
-
-// ================================================================
-// 9. DECOMPOSE EXPRESSIONS — rompe expresiones complejas
-// ================================================================
-function decomposeExpressions(code) {
-  // Convierte: a = b + c + d → local _t1=b+c a=_t1+d
-  // Simplificado: inserta variables temporales para operaciones
-  let result = code;
-  const tempCount = [0];
-  
-  // Descomponer asignaciones con operaciones largas
-  result = result.replace(/\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.{40,}?)(?=\n|;)/g, (match, name, expr) => {
-    if (expr.includes('function') || expr.includes('if')) return match;
-    const tmp = uid();
-    return `local ${tmp}=${expr} local ${name}=${tmp}`;
-  });
-
-  return result;
-}
-
-// ================================================================
-// 10. FLATTEN CONTROL FLOW — envuelve en máquina de estados
-// ================================================================
-function flattenControlFlow(blocks) {
-  const sv = uid();
-  let lua = `local ${sv}=1 while true do `;
+function applyCFF(blocks) {
+  const stateVar = generateIlName();
+  let lua = `local ${stateVar}=${heavyMathUltra(1)} while true do `;
   for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${sv}==1 then ${blocks[i]} ${sv}=${i + 2} `;
-    else         lua += `elseif ${sv}==${i + 1} then ${blocks[i]} ${sv}=${i + 2} `;
+    if (i === 0) lua += `if ${stateVar}==${heavyMathUltra(1)} then ${blocks[i]} ${stateVar}=${heavyMathUltra(2)} `;
+    else         lua += `elseif ${stateVar}==${heavyMathUltra(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMathUltra(i + 2)} `;
   }
-  lua += `elseif ${sv}==${blocks.length + 1} then break end end `;
+  lua += `elseif ${stateVar}==${heavyMathUltra(blocks.length + 1)} then break end end `;
   return lua;
 }
 
-function applyCFF(code) {
-  // Dividir el código en bloques y aplicar CFF
-  const lines = code.split('\n').filter(l => l.trim());
-  
-  // Agrupar en bloques de ~5 líneas
-  const blocks = [];
-  for (let i = 0; i < lines.length; i += 5) {
-    blocks.push(lines.slice(i, i + 5).join(' '));
-  }
-  
-  if (blocks.length <= 1) {
-    return flattenControlFlow([code]);
-  }
-  
-  return flattenControlFlow(blocks);
+// ==================== VERSIONES PARA MODO DIABOLICAL (ULTRA REDUCIDO) ====================
+
+// Reducido en un 40% respecto a la versión ultra original
+function heavyMathUltra(n) {
+  if (Math.random() < 0.2) return n.toString();
+  let a = Math.floor(Math.random() * 5000) + 1000;
+  let b = Math.floor(Math.random() * 100) + 2;
+  let c = Math.floor(Math.random() * 800) + 10;
+  // 40% menos operaciones: eliminamos d,e,f y sus combinaciones
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${c})/${c})-${c})`;
 }
 
-// ================================================================
-// 11. ENVIRONMENT CHECK — anti-tamper
-// ================================================================
-function environmentCheck() {
-  const errVar = uid();
-  return `
-local ${errVar}=function() while true do end end
-if math.pi<3.14 or math.pi>3.15 then ${errVar}() end
-if type(tostring)~="function" then ${errVar}() end
-if math.abs(-1)~=1 then ${errVar}() end
-if string.char(65)~="A" then ${errVar}() end
-if type(game)~="userdata" then ${errVar}() end
-if type(workspace)~="userdata" then ${errVar}() end
-if type(Instance)~="function" then ${errVar}() end
-if type(getfenv)~="function" then ${errVar}() end
-`.trim().replace(/\n/g, ' ');
+function mbaUltra() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  // Simplificado (40% menos): eliminamos multiplicación y división final
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// ================================================================
-// 12. VIRTUALIZE SCRIPT — VM real con XOR encrypt + loadstring
-// ================================================================
-function xorEncrypt(str, key) {
-  const out = [];
-  for (let i = 0; i < str.length; i++) {
-    out.push((str.charCodeAt(i) ^ key[i % key.length]) & 0xFF);
-  }
-  return out;
-}
-
-function virtualizeScript(sourceCode) {
-  const keyLen = 24;
-  const key = Array.from({length: keyLen}, () => Math.floor(Math.random() * 200) + 30);
-  const encrypted = xorEncrypt(sourceCode, key);
-
-  const PAYLOAD = uid();
-  const KEY     = uid();
-  const OUT     = uid();
-  const IDX     = uid();
-  const BYTE    = uid();
-  const KV      = uid();
-  const A       = uid();
-  const B       = uid();
-  const R       = uid();
-  const P       = uid();
-  const GENV    = uid();
-  const LSTR    = uid();
-  const ASRT    = uid();
-
-  // Dividir clave en 4 partes de 6 bytes c/u
-  const k1 = uid(), k2 = uid(), k3 = uid(), k4 = uid();
-  const part = (start, end) => key.slice(start, end).join(',');
-
-  let code = `
-local ${k1}={${part(0,6)}}
-local ${k2}={${part(6,12)}}
-local ${k3}={${part(12,18)}}
-local ${k4}={${part(18,24)}}
-local ${KEY}={}
-for _,v in ipairs(${k1}) do table.insert(${KEY},v) end
-for _,v in ipairs(${k2}) do table.insert(${KEY},v) end
-for _,v in ipairs(${k3}) do table.insert(${KEY},v) end
-for _,v in ipairs(${k4}) do table.insert(${KEY},v) end
-local ${PAYLOAD}={${encrypted.join(',')}}
-local ${OUT}={}
-local ${IDX}=0
-for _,${BYTE} in ipairs(${PAYLOAD}) do
-  ${IDX}=${IDX}+1
-  local ${KV}=${KEY}[(${IDX}-1)%${keyLen}+1]
-  local ${R}
-  if bit32 then
-    ${R}=bit32.bxor(${BYTE},${KV})
-  else
-    local ${A},${B},${P}=${BYTE},${KV},1
-    ${R}=0
-    for _i=1,8 do
-      local _ab,_bb=${A}%2,${B}%2
-      if _ab~=_bb then ${R}=${R}+${P} end
-      ${A}=(${A}-_ab)/2
-      ${B}=(${B}-_bb)/2
-      ${P}=${P}*2
-    end
-  end
-  table.insert(${OUT},string.char(${R}))
-end
-local ${GENV}=getfenv()
-local ${LSTR}=${GENV}[table.concat({"load","string"})]
-local ${ASRT}=${GENV}[table.concat({"ass","ert"})]
-${ASRT}(${LSTR}(table.concat(${OUT})))()
-`.trim().replace(/\n/g, ' ');
-
-  return code;
-}
-
-// ================================================================
-// 13. EMBED RUNTIME — envuelve la VM en una función runtime
-// ================================================================
-function embedRuntime(vmCode) {
-  const RT    = uid();
-  const EXEC  = uid();
-  const handlers = Array.from({length: 4}, () => pickHandler());
-  const realIdx = Math.floor(Math.random() * 4);
-  const DISP  = uid();
-
-  let out = `local ${RT}={} `;
-  for (let i = 0; i < 4; i++) {
-    if (i === realIdx) {
-      out += `local ${handlers[i]}=function() ${vmCode} end `;
+function generateJunkUltra(lines = 100) {
+  let j = '';
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random();
+    if (r < 0.2) j += `local ${generateIlName()}=${heavyMathUltra(Math.floor(Math.random() * 999))} `;
+    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMathUltra(Math.floor(Math.random()*255))}) `;
+    else if (r < 0.5) j += `if not(${heavyMathUltra(1)}==${heavyMathUltra(1)}) then local x=1 end `;
+    else if (r < 0.7) {
+      const tp = generateIlName();
+      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `;
+    } else if (r < 0.85) {
+      const vt = generateIlName();
+      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
     } else {
-      out += `local ${handlers[i]}=function() return nil end `;
+      j += `if type(math.pi)=="string" then local _=1 end `;
     }
   }
-  out += `local ${DISP}={} `;
-  for (let i = 0; i < 4; i++) {
-    out += `${DISP}[${i + 1}]=${handlers[i]} `;
-  }
+  return j;
+}
 
-  const sv = uid();
-  out += `local ${sv}=1 while true do `;
-  for (let i = 0; i < 4; i++) {
-    if (i === 0) out += `if ${sv}==1 then ${DISP}[${i + 1}]() ${sv}=${i + 2} `;
-    else         out += `elseif ${sv}==${i + 1} then ${DISP}[${i + 1}]() ${sv}=${i + 2} `;
+function detectAndApplyMappingsUltra(code) {
+  const MAPEO = {
+    "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+    "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+    "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+  };
+  let modified = code, headers = "";
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMathUltra(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mbaUltra()}==1 or true)and"${word}")`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, () => `game[${replacement}]`);
+    }
   }
-  out += `elseif ${sv}==5 then break end end `;
+  return headers + modified;
+}
 
+function buildTrueVMUltra(payloadStr) {
+  const STACK = generateIlName(); const KEY = generateIlName(); const SALT = generateIlName();
+  const seed = Math.floor(Math.random() * 200) + 50;
+  const saltVal = Math.floor(Math.random() * 250) + 1;
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMathUltra(seed)} local ${SALT}=${heavyMathUltra(saltVal)} `;
+  const chunkSize = 15; let realChunks = [];
+  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
+  let poolVars = []; let realOrder = [];
+  let totalChunks = realChunks.length * 3; let currentReal = 0; let globalIndex = 0;
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = generateIlName(); poolVars.push(memName);
+    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1);
+      let chunk = realChunks[currentReal]; let encryptedBytes = [];
+      for(let j = 0; j < chunk.length; j++) {
+        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
+        encryptedBytes.push(heavyMathUltra(enc));
+        globalIndex++;
+      }
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      currentReal++;
+    } else {
+      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 20) + 5;
+      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMathUltra(Math.floor(Math.random() * 255))); }
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
+    }
+  }
+  vmCore += `local _pool={${poolVars.join(',')}} local _order={${realOrder.map(n => heavyMathUltra(n)).join(',')}} `;
+  vmCore += `local _gIdx=0 for _, idx in ipairs(_order) do for _, byte in ipairs(_pool[idx]) do `;
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
+  vmCore += `table.insert(${STACK}, string.char(math.floor((byte - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
+  const ASSERT     = `getfenv()[${runtimeString("assert")}]`;
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
+  const GAME       = `getfenv()[${runtimeString("game")}]`;
+  const HTTPGET    = runtimeString("HttpGet");
+  if (payloadStr.includes("http")) { vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `; }
+  else { vmCore += `${ASSERT}(${LOADSTRING}(_e))() `; }
+  return vmCore;
+}
+
+function buildSingleVMNormalUltra(innerCode, handlerCount) {
+  const handlers = pickHandlers(handlerCount);
+  const realIdx  = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName();
+  let out = `local lM={} `;
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkUltra(5)} ${innerCode} end `; }
+    else               { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkUltra(3)} return nil end `; }
+  }
+  out += `local ${DISPATCH}={`;
+  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMathUltra(i + 1)}]=${handlers[i]},`; }
+  out += `} `;
+  const execBlocks = [];
+  for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMathUltra(i + 1)}](lM)`); }
+  out += applyCFF(execBlocks);
   return out;
 }
 
-// ================================================================
-// OBFUSCATE NORMAL — técnicas imagen 1
-// Mangle statements + named indexes + self calls + globals
-// + Lift constants 25% + CFF + Virtualize
-// ================================================================
-function obfuscateNormal(sourceCode) {
-  let code = sourceCode;
+function getUltraProtections() {
+  const antiDebuggers =
+    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
+    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
+    `if debug and debug.sethook then debug.sethook(function() while true do end end, "l", 5) end `;
 
-  // Paso 1: lift constants (25%)
-  code = liftConstants(code, 25);
+  const rawTampers = [
+    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
+    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
+    `if type(tostring)~="function" then _err() end`,
+    `if not string.match("chk","^c.*k$") then _err() end`,
+    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`,
+    `if math.abs(-10)~=10 then _err() end`,
+    `if string.char(65)~="A" then _err() end`,
+    `if type({})~="table" then _err() end`,
+    `if type(1)~="number" then _err() end`,
+    `if type("a")~="string" then _err() end`,
+    `if type(true)~="boolean" then _err() end`,
+    `if type(nil)~="nil" then _err() end`,
+    `if type(function() end)~="function" then _err() end`,
+    `if type(coroutine.create(function() end))~="thread" then _err() end`,
+    `if type(io)~="userdata" then _err() end`,
+    `if type(game)~="userdata" then _err() end`,
+    `if type(workspace)~="userdata" then _err() end`,
+    `if type(script)~="userdata" then _err() end`,
+    `if type(Instance)~="function" then _err() end`,
+    `if type(getfenv)~="function" then _err() end`,
+    `if type(setfenv)~="function" then _err() end`
+  ];
 
-  // Paso 2: mangle named indexes
-  code = mangleNamedIndexes(code);
+  let codeVaultGuards = "";
+  for (const t of rawTampers) {
+    const fnName  = generateIlName();
+    const errName = generateIlName();
+    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${t.replace("_err()", `${errName}("!")`)} end ${fnName}() `;
+  }
 
-  // Paso 3: mangle self-calls
-  code = mangleSelfCalls(code);
-
-  // Paso 4: mangle globals
-  code = mangleGlobals(code);
-
-  // Paso 5: mangle statements (rename vars)
-  code = mangleStatements(code);
-
-  // Paso 6: flatten control flow
-  code = applyCFF(code);
-
-  // Paso 7: virtualize (XOR + loadstring VM)
-  code = virtualizeScript(code);
-
-  return code.replace(/\s+/g, ' ').trim();
+  return antiDebuggers + codeVaultGuards;
 }
 
-// ================================================================
-// OBFUSCATE DIABOLICAL — técnicas imagen 2 (todo + más)
-// Todo lo anterior + embed runtime + mangle numbers + mangle strings
-// + decompose expressions + hoist locals + environment check
-// + lift constants 50%
-// ================================================================
+// PROFUNDIDAD REDUCIDA DE 200 A 150 (50 VM menos)
+function buildFragileVM(innerCode, depth = 0) {
+  if (depth >= 45) return innerCode;  // <-- Cambio aquí
+
+  const vmName = generateIlName();
+  const handlerCount = Math.floor(Math.random() * 5) + 3;
+  const handlers = pickHandlers(handlerCount);
+  const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName();
+
+  let out = `local ${vmName}={} `;
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) {
+      out += `local ${handlers[i]}=function(${vmName}) `;
+      out += `local _chk="${generateIlName()}" `;
+      out += `if ${vmName}[${heavyMathUltra(1)}]~=nil then error("VM corrupted") end `;
+      out += `${generateJunkUltra(5)} `;
+      out += buildFragileVM(innerCode, depth + 1);
+      out += ` end `;
+    } else {
+      out += `local ${handlers[i]}=function(${vmName}) ${generateJunkUltra(3)} return nil end `;
+    }
+  }
+
+  out += `local ${DISPATCH}={`;
+  for (let i = 0; i < handlers.length; i++) {
+    out += `[${heavyMathUltra(i + 1)}]=${handlers[i]},`;
+  }
+  out += `} `;
+
+  const execBlocks = [];
+  for (let i = 0; i < handlers.length; i++) {
+    execBlocks.push(`${DISPATCH}[${heavyMathUltra(i + 1)}](${vmName})`);
+  }
+  out += applyCFF(execBlocks);
+  return out;
+}
+
 function obfuscateDiabolical(sourceCode) {
-  let code = sourceCode;
+  if (!sourceCode) return '-- Error: No Source';
 
-  // Paso 1: hoist locals
-  // code = hoistLocals(code); // puede romper código, omitir en primera versión
+  const extraProtections = getUltraProtections();
 
-  // Paso 2: lift constants (50%)
-  code = liftConstants(code, 50);
+  let payloadToProtect = "";
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
+  const match = sourceCode.match(isLoadstringRegex);
+  if (match) { payloadToProtect = match[1]; }
+  else       { payloadToProtect = detectAndApplyMappingsUltra(sourceCode); }
 
-  // Paso 3: mangle strings
-  code = mangleStrings(code);
+  let vm = buildTrueVMUltra(payloadToProtect);
+  vm = buildFragileVM(vm, 0);
 
-  // Paso 4: mangle numbers
-  code = mangleNumbers(code);
+  let finalCode = `${HEADER} ${generateJunkUltra(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+  const targetSize = 246 * 1024;
+  let currentSize = Buffer.byteLength(finalCode, 'utf8');
 
-  // Paso 5: mangle named indexes
-  code = mangleNamedIndexes(code);
+  if (currentSize < targetSize) {
+    const neededBytes = targetSize - currentSize;
+    const junkPerLine = 50;
+    const additionalLines = Math.ceil(neededBytes / junkPerLine);
+    finalCode = `${HEADER} ${generateJunkUltra(50 + additionalLines)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+  }
 
-  // Paso 6: mangle self-calls
-  code = mangleSelfCalls(code);
-
-  // Paso 7: mangle globals
-  code = mangleGlobals(code);
-
-  // Paso 8: mangle statements
-  code = mangleStatements(code);
-
-  // Paso 9: decompose expressions
-  code = decomposeExpressions(code);
-
-  // Paso 10: flatten control flow
-  code = applyCFF(code);
-
-  // Paso 11: environment check (al principio del output final)
-  const envCheck = environmentCheck();
-
-  // Paso 12: virtualize
-  code = virtualizeScript(code);
-
-  // Paso 13: embed runtime (envuelve todo en dispatch VM)
-  code = embedRuntime(code);
-
-  return (envCheck + ' ' + code).replace(/\s+/g, ' ').trim();
+  return finalCode;
 }
 
-// ================================================================
-// EXPORT
-// ================================================================
+// ==================== VERSIONES PARA MODO NORMAL (SIN CAMBIOS) ====================
+
+function heavyMathNormal(n) {
+  if (Math.random() < 0.3) return n.toString();
+  let a = Math.floor(Math.random() * 5000) + 1000;
+  let b = Math.floor(Math.random() * 100) + 2;
+  let c = Math.floor(Math.random() * 800) + 10;
+  let d = Math.floor(Math.random() * 20) + 2;
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`;
+}
+
+function mbaNormal() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
+}
+
+function generateJunkNormal(lines = 100) {
+  let j = '';
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random();
+    if (r < 0.2) j += `local ${generateIlName()}=${heavyMathNormal(Math.floor(Math.random() * 999))} `;
+    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMathNormal(Math.floor(Math.random()*255))}) `;
+    else if (r < 0.5) j += `if not(${heavyMathNormal(1)}==${heavyMathNormal(1)}) then local x=1 end `;
+    else if (r < 0.7) {
+      const tp = generateIlName();
+      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `;
+    } else if (r < 0.85) {
+      const vt = generateIlName();
+      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
+    } else {
+      j += `if type(math.pi)=="string" then local _=1 end `;
+    }
+  }
+  return j;
+}
+
+function detectAndApplyMappingsNormal(code) {
+  const MAPEO = {
+    "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
+    "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
+    "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
+  };
+  let modified = code, headers = "";
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g");
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`;
+      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMathNormal(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mbaNormal()}==1 or true)and"${word}")`;
+      regex.lastIndex = 0;
+      modified = modified.replace(regex, (match) => `game[${replacement}]`);
+    }
+  }
+  return headers + modified;
+}
+
+function buildTrueVMNormal(payloadStr) {
+  const STACK = generateIlName(); const KEY = generateIlName(); const SALT = generateIlName();
+  const seed = Math.floor(Math.random() * 200) + 50;
+  const saltVal = Math.floor(Math.random() * 250) + 1;
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMathNormal(seed)} local ${SALT}=${heavyMathNormal(saltVal)} `;
+  const chunkSize = 15; let realChunks = [];
+  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
+  let poolVars = []; let realOrder = [];
+  let totalChunks = realChunks.length * 3; let currentReal = 0; let globalIndex = 0;
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = generateIlName(); poolVars.push(memName);
+    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1);
+      let chunk = realChunks[currentReal]; let encryptedBytes = [];
+      for(let j = 0; j < chunk.length; j++) { 
+        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
+        encryptedBytes.push(heavyMathNormal(enc)); 
+        globalIndex++;
+      }
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      currentReal++;
+    } else {
+      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 20) + 5;
+      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMathNormal(Math.floor(Math.random() * 255))); }
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
+    }
+  }
+  vmCore += `local _pool={${poolVars.join(',')}} local _order={${realOrder.map(n => heavyMathNormal(n)).join(',')}} `;
+  vmCore += `local _gIdx=0 for _, idx in ipairs(_order) do for _, byte in ipairs(_pool[idx]) do `;
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
+  vmCore += `table.insert(${STACK}, string.char(math.floor((byte - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
+  const ASSERT = `getfenv()[${runtimeString("assert")}]`;
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
+  const GAME = `getfenv()[${runtimeString("game")}]`;
+  const HTTPGET = runtimeString("HttpGet");
+  if (payloadStr.includes("http")) { vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() ` } 
+  else { vmCore += `${ASSERT}(${LOADSTRING}(_e))() ` }
+  return vmCore;
+}
+
+function buildSingleVMNormalNormal(innerCode, handlerCount) {
+  const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName(); let out = `local lM={} `;
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkNormal(5)} ${innerCode} end `; } 
+    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkNormal(3)} return nil end `; }
+  }
+  out += `local ${DISPATCH}={`
+  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMathNormal(i + 1)}]=${handlers[i]},` }
+  out += `} `
+  let execBlocks = []; for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMathNormal(i + 1)}](lM)`) }
+  out += applyCFF(execBlocks); return out;
+}
+
+function getNormalProtections() {
+  const antiDebuggers = `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
+    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end `;
+  const rawTampers = [
+    `if math.pi<3.14 or math.pi>3.15 then _err() end`, `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
+    `if type(tostring)~="function" then _err() end`, `if not string.match("chk","^c.*k$") then _err() end`,
+    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`, `if math.abs(-10)~=10 then _err() end`
+  ];
+  let codeVaultGuards = "";
+  for(let t of rawTampers) {
+    const fnName = generateIlName(); const errName = generateIlName();
+    const injectedError = t.replace("_err()", `${errName}("!")`);
+    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
+  }
+  return antiDebuggers + codeVaultGuards;
+}
+
+function obfuscateNormal(sourceCode) {
+  if (!sourceCode) return '-- Error: No Source';
+
+  const extraProtections = getNormalProtections();
+  let payloadToProtect = "";
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
+  const match = sourceCode.match(isLoadstringRegex);
+  if (match) { payloadToProtect = match[1]; } 
+  else { payloadToProtect = detectAndApplyMappingsNormal(sourceCode); }
+
+  let vm = buildTrueVMNormal(payloadToProtect);
+  for (let i = 0; i < 17; i++) {
+    vm = buildSingleVMNormalNormal(vm, Math.floor(Math.random() * 2) + 3); 
+  }
+  return `${HEADER} ${generateJunkNormal(50)} ${extraProtections} ${vm}`.replace(/\s+/g, " ").trim();
+}
+
+// ==================== FUNCIÓN PRINCIPAL EXPORTADA ====================
+
 function obfuscate(sourceCode, mode = 'normal') {
-  if (!sourceCode || sourceCode.trim() === '') return '-- Error: codigo vacio';
-  return mode === 'diabolical'
-    ? obfuscateDiabolical(sourceCode)
-    : obfuscateNormal(sourceCode);
+  if (mode === 'diabolical') {
+    return obfuscateDiabolical(sourceCode);
+  } else {
+    return obfuscateNormal(sourceCode);
+  }
 }
 
 module.exports = { obfuscate };
-  
